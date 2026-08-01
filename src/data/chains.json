@@ -1,0 +1,15 @@
+{
+  "chains": {
+    "carrot": {
+      "id": "carrot",
+      "name": "Морковь",
+      "items": [
+        { "tier": 1, "id": "carrot_seed", "name": "Семена" },
+        { "tier": 2, "id": "carrot_sprout", "name": "Росток" },
+        { "tier": 3, "id": "carrot_bush", "name": "Куст" },
+        { "tier": 4, "id": "carrot", "name": "Морковь" },
+        { "tier": 5, "id": "carrot_golden", "name": "Золотая морковь" }
+      ]
+    }
+  }
+}
