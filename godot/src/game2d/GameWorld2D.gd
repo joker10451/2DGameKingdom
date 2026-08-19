@@ -99,6 +99,7 @@ const PartyModalScript = preload("res://src/ui/modals/PartyModal.gd")
 const EstateModalScript = preload("res://src/ui/modals/EstateModal.gd")
 const ConstructionModalScript = preload("res://src/ui/modals/ConstructionModal.gd")
 const ChestModalScript = preload("res://src/ui/modals/ChestModal.gd")
+const OriginModalScript = preload("res://src/ui/modals/OriginModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -376,6 +377,9 @@ var estate_modal: RefCounted
 var construction_modal: RefCounted
 
 var chest_modal: RefCounted
+
+var origin_modal: RefCounted
+
 
 
 
@@ -4702,7 +4706,13 @@ func _build_ui_hud() -> void:
 	)
 
 	_build_settlement_modal(canvas)
-	_build_origin_modal(canvas)
+	# Vybor puti vynesen v ui/modals/OriginModal.gd (fasade).
+	origin_modal = OriginModalScript.new()
+	origin_modal.build(
+		canvas,
+		_choose_origin,   # on_choose(orig_id)
+		_close_all_modals  # on_close
+	)
 
 	_build_citizen_shop_modal(canvas)
 
@@ -5351,6 +5361,7 @@ func _close_all_modals() -> void:
 	if estate_modal: estate_modal.close()
 	if construction_modal: construction_modal.close()
 	if chest_modal: chest_modal.close()
+	if origin_modal: origin_modal.close()
 
 	if party_panel: party_panel.visible = false
 
@@ -6950,114 +6961,20 @@ func _update_colonists_labor(delta: float) -> void:
 			_spawn_spark_particles(act_world, Color(0.9, 0.8, 0.3))
 
 			if step_res.get("thought_icon", "") != "":
+				_spawn_floating_text(act_world, step_res["thought"], Color(0.9, 0.8, 0.3), 14)
 
-				_spawn_floating_text(act_world, step_res["thought_icon"], Color.GOLD, 18)
-
-
-
-# =========================================================
-
-# KINGDOMS SANDBOX: ВЫБОР СТАРТОВОГО ПУТИ (ORIGINS) 🎭
-
-# =========================================================
-
-func _build_origin_modal(canvas: CanvasLayer) -> void:
-
-	origin_panel = PanelContainer.new()
-
-	origin_panel.position = Vector2(240, 70)
-
-	origin_panel.custom_minimum_size = Vector2(800, 520)
-
-	origin_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.15, 0.98), Color(0.88, 0.72, 0.30), 2, 8))
-
-	origin_panel.visible = false
-
-	canvas.add_child(origin_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 12)
-
-	origin_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "👑 ВЫБОР ВАШЕГО ПУТИ В ОЛДЕРИИ (KINGDOMS ORIGIN)"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	var desc = Label.new()
-
-	desc.text = "Кем вы начнете свое путешествие в средневековом мире? Каждый путь дает уникальный стартовый набор и цели."
-
-	desc.add_theme_font_size_override("font_size", 12)
-
-	desc.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
-
-	vbox.add_child(desc)
-
-	
-
-	var scroll = ScrollContainer.new()
-
-	scroll.custom_minimum_size = Vector2(760, 380)
-
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	vbox.add_child(scroll)
-
-	
-
-	var list_v = VBoxContainer.new()
-
-	list_v.add_theme_constant_override("separation", 8)
-
-	scroll.add_child(list_v)
-
-	
-
-	for o_id in SettlementDatabase.ORIGINS.keys():
-
-		var o = SettlementDatabase.ORIGINS[o_id]
-
-		var btn = Button.new()
-
-		btn.custom_minimum_size = Vector2(740, 68)
-
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-
-		btn.text = "%s %s\n%s" % [o.get("icon", "⚔️"), o.get("name", ""), o.get("desc", "")]
-
-		_style_button(btn)
-
-		btn.pressed.connect(func():
-
-			_choose_origin(o_id)
-
-		)
-
-		list_v.add_child(btn)
-
+func _build_origin_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: vybor puti vynesen v ui/modals/OriginModal.gd.
+	# Sozdanie v _build_ui_hud() cherez origin_modal.build().
+	pass
 
 
 func _show_origin_modal() -> void:
-
+	if origin_modal == null:
+		return
 	_close_all_modals()
-
 	is_ui_open = true
-
-	origin_panel.visible = true
+	origin_modal.open()
 
 
 
