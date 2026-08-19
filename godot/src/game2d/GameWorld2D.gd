@@ -92,6 +92,7 @@ const FactionWarfareSystemScript = preload("res://src/world/FactionWarfareSystem
 const EnhancedArtGeneratorScript = preload("res://src/world/EnhancedArtGenerator.gd")
 const InventoryModalScript = preload("res://src/ui/modals/InventoryModal.gd")
 const SkillsModalScript = preload("res://src/ui/modals/SkillsModal.gd")
+const TradeModalScript = preload("res://src/ui/modals/TradeModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -355,6 +356,8 @@ var selected_inv_item: String = ""
 var inventory_modal: RefCounted
 
 var skills_modal: RefCounted
+
+var trade_modal: RefCounted
 
 
 
@@ -4611,7 +4614,9 @@ func _build_ui_hud() -> void:
 
 	_build_party_modal(canvas)
 
-	_build_trade_modal(canvas)
+	# Рынок вынесен в ui/modals/TradeModal.gd (фасад, мутации через local_market).
+	trade_modal = TradeModalScript.new()
+	trade_modal.build(canvas, _get_game_manager, _log, _close_all_modals)
 
 	_build_smithing_modal(canvas)
 
@@ -4943,233 +4948,33 @@ func _apply_inventory_use_effects(item_id: String) -> void:
 
 
 
-func _build_trade_modal(canvas: CanvasLayer) -> void:
-
-	trade_panel = PanelContainer.new()
-
-	trade_panel.position = Vector2(230, 80)
-
-	trade_panel.custom_minimum_size = Vector2(820, 500)
-
-	trade_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
-
-	trade_panel.visible = false
-
-	canvas.add_child(trade_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	trade_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "⚖️ ГОРОДСКОЙ РЫНОК ОЛДЕРИИ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	trade_gold_label = Label.new()
-
-	trade_gold_label.text = "Ваше золото: 50"
-
-	trade_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-
-	vbox.add_child(trade_gold_label)
-
-	
-
-	var hbox = HBoxContainer.new()
-
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	hbox.add_theme_constant_override("separation", 20)
-
-	vbox.add_child(hbox)
-
-	
-
-	var m_vbox = VBoxContainer.new()
-
-	m_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(m_vbox)
-
-	var m_lbl = Label.new()
-
-	m_lbl.text = "🏪 Товары торговца:"
-
-	m_vbox.add_child(m_lbl)
-
-	trade_merchant_list = ItemList.new()
-
-	trade_merchant_list.custom_minimum_size = Vector2(370, 260)
-
-	m_vbox.add_child(trade_merchant_list)
-
-	var buy_btn = Button.new()
-
-	buy_btn.text = "💰 Купить (1 шт.)"
-
-	_style_button(buy_btn)
-
-	buy_btn.pressed.connect(_on_buy_market_item)
-
-	m_vbox.add_child(buy_btn)
-
-	
-
-	var p_vbox = VBoxContainer.new()
-
-	p_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(p_vbox)
-
-	var p_lbl = Label.new()
-
-	p_lbl.text = "🎒 Ваши товары на продажу:"
-
-	p_vbox.add_child(p_lbl)
-
-	trade_player_list = ItemList.new()
-
-	trade_player_list.custom_minimum_size = Vector2(370, 260)
-
-	p_vbox.add_child(trade_player_list)
-
-	var sell_btn = Button.new()
-
-	sell_btn.text = "💵 Продать (1 шт.)"
-
-	_style_button(sell_btn)
-
-	sell_btn.pressed.connect(_on_sell_market_item)
-
-	p_vbox.add_child(sell_btn)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_trade_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: рынок вынесен в ui/modals/TradeModal.gd.
+	# Создание происходит в _build_ui_hud() через trade_modal.build().
+	pass
 
 
 func _open_market_trade() -> void:
-
+	if trade_modal == null:
+		return
 	_close_all_modals()
-
 	is_ui_open = true
-
-	trade_panel.visible = true
-
-	_refresh_trade_window()
-
+	trade_modal.open()
 
 
 func _refresh_trade_window() -> void:
-
-	trade_merchant_list.clear()
-
-	trade_player_list.clear()
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	var m = gm.local_market if gm else null
-
-	if not p or not m: return
-
-	trade_gold_label.text = "💰 Ваше золото: %d золотых" % p.gold
-
-	
-
-	for item_id in m.inventory.keys():
-
-		var count = m.inventory[item_id]
-
-		var price = m.get_current_price(item_id)
-
-		var item = ItemDatabase.get_item(item_id)
-
-		trade_merchant_list.add_item("%s %s (Запас: %d) — %.1f з." % [item.get("icon", "📦"), item.get("name", item_id), count, price])
-
-		trade_merchant_list.set_item_metadata(trade_merchant_list.get_item_count() - 1, item_id)
-
-		
-
-	for item_id in p.inventory.keys():
-
-		var count = p.inventory[item_id]
-
-		var item = ItemDatabase.get_item(item_id)
-
-		var price = m.get_current_price(item_id) * 0.8
-
-		trade_player_list.add_item("%s %s x%d — продажа: %.1f з." % [item.get("icon", "📦"), item.get("name", item_id), count, price])
-
-		trade_player_list.set_item_metadata(trade_player_list.get_item_count() - 1, item_id)
-
+	if trade_modal:
+		trade_modal.refresh()
 
 
 func _on_buy_market_item() -> void:
-
-	var sel = trade_merchant_list.get_selected_items()
-
-	if sel.size() == 0: return
-
-	var item_id = trade_merchant_list.get_item_metadata(sel[0])
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	var m = gm.local_market if gm else null
-
-	if p and m and m.buy_from_market(p, item_id, 1):
-
-		_log("[color=green]Куплено: %s[/color]" % ItemDatabase.get_item(item_id).get("name", ""))
-
-		_refresh_trade_window()
-
+	if trade_modal:
+		trade_modal._on_buy_pressed()
 
 
 func _on_sell_market_item() -> void:
-
-	var sel = trade_player_list.get_selected_items()
-
-	if sel.size() == 0: return
-
-	var item_id = trade_player_list.get_item_metadata(sel[0])
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	var m = gm.local_market if gm else null
-
-	if p and m and m.sell_to_market(p, item_id, 1):
-
-		_log("[color=green]Продано: %s[/color]" % ItemDatabase.get_item(item_id).get("name", ""))
-
-		_refresh_trade_window()
+	if trade_modal:
+		trade_modal._on_sell_pressed()
 
 
 
@@ -5952,6 +5757,9 @@ func _close_all_modals() -> void:
 	if skills_panel: skills_panel.visible = false
 
 	if trade_panel: trade_panel.visible = false
+	if inventory_modal: inventory_modal.close()
+	if skills_modal: skills_modal.close()
+	if trade_modal: trade_modal.close()
 
 	if smith_panel: smith_panel.visible = false
 
