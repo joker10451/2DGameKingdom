@@ -94,6 +94,7 @@ const InventoryModalScript = preload("res://src/ui/modals/InventoryModal.gd")
 const SkillsModalScript = preload("res://src/ui/modals/SkillsModal.gd")
 const TradeModalScript = preload("res://src/ui/modals/TradeModal.gd")
 const SmithingModalScript = preload("res://src/ui/modals/SmithingModal.gd")
+const ContractsModalScript = preload("res://src/ui/modals/ContractsModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -361,6 +362,8 @@ var skills_modal: RefCounted
 var trade_modal: RefCounted
 
 var smithing_modal: RefCounted
+
+var contracts_modal: RefCounted
 
 
 
@@ -4613,7 +4616,18 @@ func _build_ui_hud() -> void:
 	skills_modal = SkillsModalScript.new()
 	skills_modal.build(canvas, _pd, SkillSystem, _close_all_modals)
 
-	_build_contracts_modal(canvas)
+	# Контракты (фасад ui/modals/ContractsModal.gd; _build_contracts_modal -> pass).
+	contracts_modal = ContractsModalScript.new()
+	contracts_modal.build(
+		canvas,
+		_get_game_manager,
+		_log,
+		_spawn_floating_text,
+		_spawn_spark_particles,
+		_on_contract_action_pressed,
+		_on_contract_abandon_pressed,
+		_close_all_modals
+	)
 
 	_build_party_modal(canvas)
 
@@ -5579,6 +5593,7 @@ func _close_all_modals() -> void:
 	if skills_modal: skills_modal.close()
 	if trade_modal: trade_modal.close()
 	if smithing_modal: smithing_modal.close()
+	if contracts_modal: contracts_modal.close()
 
 	if smith_panel: smith_panel.visible = false
 
@@ -5671,713 +5686,78 @@ func _get_time_manager() -> Node:
 
 # =========================================================
 
-func _build_contracts_modal(canvas: CanvasLayer) -> void:
-
-	contracts_panel = PanelContainer.new()
-
-	contracts_panel.position = Vector2(160, 50)
-
-	contracts_panel.custom_minimum_size = Vector2(960, 560)
-
-	contracts_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
-
-	contracts_panel.visible = false
-
-	canvas.add_child(contracts_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	contracts_panel.add_child(vbox)
-
-	
-
-	# Верхняя шапка
-
-	var top_h = HBoxContainer.new()
-
-	top_h.add_theme_constant_override("separation", 12)
-
-	vbox.add_child(top_h)
-
-	
-
-	var title = Label.new()
-
-	title.text = "📜 ФЕОДАЛЬНЫЕ КОНТРАКТЫ И ДОСКА ОБЪЯВЛЕНИЙ ОЛДЕРИИ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	top_h.add_child(title)
-
-	
-
-	var spacer = Control.new()
-
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	top_h.add_child(spacer)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "✖ Закрыть [ ESC ]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	top_h.add_child(close_btn)
-
-	
-
-	# Вкладки / Переключатели режимов
-
-	var tab_bar = HBoxContainer.new()
-
-	tab_bar.add_theme_constant_override("separation", 10)
-
-	vbox.add_child(tab_bar)
-
-	
-
-	var tab_avail_btn = Button.new()
-
-	tab_avail_btn.text = "📜 Доступные заказы Доски"
-
-	_style_button(tab_avail_btn)
-
-	tab_avail_btn.pressed.connect(func():
-
-		contracts_tab_idx = 0
-
-		selected_contract_id = ""
-
-		_refresh_contracts_window()
-
-	)
-
-	tab_bar.add_child(tab_avail_btn)
-
-	
-
-	var tab_active_btn = Button.new()
-
-	tab_active_btn.text = "⭐ Мои активные задания"
-
-	_style_button(tab_active_btn)
-
-	tab_active_btn.pressed.connect(func():
-
-		contracts_tab_idx = 1
-
-		selected_contract_id = ""
-
-		_refresh_contracts_window()
-
-	)
-
-	tab_bar.add_child(tab_active_btn)
-
-	
-
-	var tab_rep_btn = Button.new()
-
-	tab_rep_btn.text = "⚖️ Отношения с Фракциями"
-
-	_style_button(tab_rep_btn)
-
-	tab_rep_btn.pressed.connect(func():
-
-		contracts_tab_idx = 2
-
-		selected_contract_id = ""
-
-		_refresh_contracts_window()
-
-	)
-
-	tab_bar.add_child(tab_rep_btn)
-
-	
-
-	# Основное тело (две колонки)
-
-	var body_h = HBoxContainer.new()
-
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	body_h.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(body_h)
-
-	
-
-	# Левая колонка: Список
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(340, 410)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	body_h.add_child(left_p)
-
-	
-
-	contracts_list = ItemList.new()
-
-	contracts_list.custom_minimum_size = Vector2(320, 390)
-
-	contracts_list.item_selected.connect(_on_contract_selected)
-
-	left_p.add_child(contracts_list)
-
-	
-
-	# Правая колонка: Детальная карточка и кнопки действия
-
-	var right_v = VBoxContainer.new()
-
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	right_v.add_theme_constant_override("separation", 10)
-
-	body_h.add_child(right_v)
-
-	
-
-	var right_p = PanelContainer.new()
-
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	right_v.add_child(right_p)
-
-	
-
-	contracts_detail_label = RichTextLabel.new()
-
-	contracts_detail_label.bbcode_enabled = true
-
-	contracts_detail_label.custom_minimum_size = Vector2(560, 330)
-
-	right_p.add_child(contracts_detail_label)
-
-	
-
-	var act_h = HBoxContainer.new()
-
-	act_h.add_theme_constant_override("separation", 12)
-
-	right_v.add_child(act_h)
-
-	
-
-	contracts_action_btn = Button.new()
-
-	contracts_action_btn.text = "Взять контракт"
-
-	contracts_action_btn.custom_minimum_size = Vector2(220, 38)
-
-	_style_button(contracts_action_btn)
-
-	contracts_action_btn.pressed.connect(_on_contract_action_pressed)
-
-	act_h.add_child(contracts_action_btn)
-
-	
-
-	contracts_abandon_btn = Button.new()
-
-	contracts_abandon_btn.text = "Отказаться"
-
-	contracts_abandon_btn.custom_minimum_size = Vector2(140, 38)
-
-	_style_button(contracts_abandon_btn)
-
-	contracts_abandon_btn.pressed.connect(_on_contract_abandon_pressed)
-
-	act_h.add_child(contracts_abandon_btn)
-
+func _build_contracts_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: контракты вынесены в ui/modals/ContractsModal.gd.
+	# Создание происходит в _build_ui_hud() через contracts_modal.build().
+	pass
 
 
 func _toggle_contracts_menu() -> void:
-
-	if contracts_panel.visible:
-
+	if contracts_modal == null:
+		return
+	if contracts_modal.is_open():
 		_close_all_modals()
-
 	else:
-
 		_close_all_modals()
-
 		is_ui_open = true
+		contracts_modal.open()
 
-		contracts_panel.visible = true
-
-		contracts_tab_idx = 0
-
-		_refresh_contracts_window()
 
 
 
 func _open_notice_board_menu() -> void:
-
+	if contracts_modal == null:
+		return
 	_close_all_modals()
-
 	is_ui_open = true
-
-	contracts_panel.visible = true
-
-	contracts_tab_idx = 0
-
-	_refresh_contracts_window()
-
+	contracts_modal.open()
 	_log("[color=gold]📜 Вы подошли к Доске Объявлений Олдерии.[/color]")
 
 
 
+
 func _refresh_contracts_window() -> void:
-
-	var gm = _get_game_manager()
-
-	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	
-
-	ContractManager.ensure_player_contracts(p)
-
-	ContractManager.sync_supply_contracts(p)
-
-	contracts_list.clear()
-
-	
-
-	if contracts_tab_idx == 0:
-
-		# Доступные контракты
-
-		var av = ContractManager.get_available_contracts(p)
-
-		for c in av:
-
-			contracts_list.add_item("%s" % c.get("title", "Контракт"))
-
-			contracts_list.set_item_metadata(contracts_list.get_item_count() - 1, c.get("id", ""))
-
-			
-
-		contracts_action_btn.visible = true
-
-		contracts_action_btn.text = "📜 Взять контракт"
-
-		contracts_abandon_btn.visible = false
-
-		
-
-		if av.size() > 0:
-
-			if selected_contract_id == "" or not ContractDatabase.contracts.has(selected_contract_id):
-
-				selected_contract_id = av[0].get("id", "")
-
-			_render_contract_details(ContractDatabase.get_contract(selected_contract_id), false)
-
-		else:
-
-			contracts_detail_label.text = "[center][color=gray]\n\nНа Доске Объявлений сейчас нет новых заказов.\nЗагляните позже или проверьте активные задания![/color][/center]"
-
-			contracts_action_btn.visible = false
-
-			
-
-	elif contracts_tab_idx == 1:
-
-		# Активные задания игрока
-
-		for c in p.active_contracts:
-
-			var is_ready = c.get("current_count", 0) >= c.get("required_count", 1)
-
-			var status_icon = "✅" if is_ready else "⏳"
-
-			contracts_list.add_item("%s %s" % [status_icon, c.get("title", "Задание")])
-
-			contracts_list.set_item_metadata(contracts_list.get_item_count() - 1, c.get("id", ""))
-
-			
-
-		if p.active_contracts.size() > 0:
-
-			if selected_contract_id == "":
-
-				selected_contract_id = p.active_contracts[0].get("id", "")
-
-			var cur_c: Dictionary = {}
-
-			for c in p.active_contracts:
-
-				if c.get("id") == selected_contract_id:
-
-					cur_c = c
-
-					break
-
-			if cur_c.is_empty(): cur_c = p.active_contracts[0]
-
-			_render_contract_details(cur_c, true)
-
-		else:
-
-			contracts_detail_label.text = "[center][color=gray]\n\nУ вас нет активных контрактов.\nВозьмите поручение на Доске Заказов [Вкладка 1]![/color][/center]"
-
-			contracts_action_btn.visible = false
-
-			contracts_abandon_btn.visible = false
-
-			
-
-	elif contracts_tab_idx == 2:
-
-		# Отношения с фракциями
-
-		contracts_action_btn.visible = false
-
-		contracts_abandon_btn.visible = false
-
-		
-
-		var f_data = [
-
-			{"id": "crown", "name": "👑 Дворянский Дом Нортвуд", "desc": "Феодальная знать, контролирующая замки, правопорядок и сбор налогов."},
-
-			{"id": "merchants", "name": "⚖️ Лига Купцов Золотой Монеты", "desc": "Гильдия торговцев и караванщиков. Высокая репутация дает скидки на рынке."},
-
-			{"id": "peasants", "name": "🌾 Община Вольных Крестьян", "desc": "Деревенские жители, фермеры, пекари и плотники Олдерии."},
-
-			{"id": "outlaws", "name": "🦹‍♂️ Лесное Братство (Разбойники)", "desc": "Шайки лесных бродяг и бандитов, промышляющие грабежом на трактах."}
-
-		]
-
-		
-
-		for f in f_data:
-
-			var rep = p.faction_reputation.get(f["id"], 0)
-
-			contracts_list.add_item("%s (%+d)" % [f["name"], rep])
-
-			contracts_list.set_item_metadata(contracts_list.get_item_count() - 1, f["id"])
-
-			
-
-		_render_faction_details(p)
-
-
-
-func _render_contract_details(c: Dictionary, is_active: bool) -> void:
-
-	if c.is_empty(): return
-
-	var f_name = ContractDatabase.get_faction_name(c.get("faction", ""))
-
-	var cur = c.get("current_count", 0)
-
-	var req = c.get("required_count", 1)
-
-	var is_done = cur >= req
-
-	
-
-	var r = c.get("rewards", {})
-
-	var g_rew = r.get("gold", 0)
-
-	var ren_rew = r.get("renown", 0)
-
-	var rep_rew: Dictionary = r.get("reputation", {})
-
-	var rep_str = ""
-
-	for f_id in rep_rew.keys():
-
-		rep_str += " %+d %s," % [rep_rew[f_id], ContractDatabase.get_faction_name(f_id)]
-
-	if rep_str.ends_with(","): rep_str = rep_str.left(-1)
-
-	
-
-	var target_label = ""
-
-	match c.get("category", ""):
-
-		"hunting": target_label = "Уничтожить цель: %s" % c.get("target_type", "")
-
-		"supply": target_label = "Доставить предмет: %s" % ItemDatabase.get_item(c.get("target_type", "")).get("name", "")
-
-		"delivery": target_label = "Добраться до локации на Карте Мира [ M ]"
-
-		_: target_label = "Выполнить цель"
-
-		
-
-	var status_text = ""
-
-	if is_active:
-
-		status_text = "[color=green]✅ ГОТОВО К СДАЧЕ![/color]" if is_done else "[color=yellow]⏳ В ПРОЦЕССЕ ВЫПОЛНЕНИЯ[/color]"
-
-	else:
-
-		status_text = "[color=cyan]📜 ДОСТУПЕН ДЛЯ ВЗЯТИЯ[/color]"
-
-		
-
-	contracts_detail_label.text = """[b][font_size=18]%s[/font_size][/b]
-
-[color=gold]Заказчик:[/color] %s | [color=yellow]Фракция:[/color] %s
-
-[color=lightgray]%s[/color]
-
-
-
----------------------------------------------------------
-
-[b]🎯 Цель задания:[/b] %s
-
-[b]📊 Прогресс:[/b] [color=%s]%d / %d[/color] | %s
-
-
-
-[b]💰 Награда за выполнение:[/b]
-
- • Золото: [color=gold]%d монет[/color]
-
- • Слава: [color=cyan]+%d славы[/color]
-
- • Репутация:%s
-
-""" % [
-
-		c.get("title", ""),
-
-		c.get("issuer", "Совет Олдерии"),
-
-		f_name,
-
-		c.get("desc", ""),
-
-		target_label,
-
-		"green" if is_done else "orange",
-
-		cur, req,
-
-		status_text,
-
-		g_rew, ren_rew, rep_str
-
-	]
-
-	
-
-	if is_active:
-
-		contracts_action_btn.visible = true
-
-		contracts_action_btn.text = "💰 Сдать и получить награду" if is_done else "⏳ Задание не завершено"
-
-		contracts_action_btn.disabled = not is_done
-
-		contracts_abandon_btn.visible = true
-
-	else:
-
-		contracts_action_btn.visible = true
-
-		contracts_action_btn.text = "📜 Взять контракт"
-
-		contracts_action_btn.disabled = false
-
-		contracts_abandon_btn.visible = false
-
-
-
-func _render_faction_details(p: CharacterData) -> void:
-
-	var rep_dict = p.faction_reputation
-
-	var crown_rep = rep_dict.get("crown", 0)
-
-	var merch_rep = rep_dict.get("merchants", 0)
-
-	var peas_rep = rep_dict.get("peasants", 0)
-
-	var out_rep = rep_dict.get("outlaws", 0)
-
-	
-
-	contracts_detail_label.text = """[b][font_size=18]⚖️ ДИНАМИЧЕСКИЕ ОТНОШЕНИЯ С ФРАКЦИЯМИ[/font_size][/b]
-
-[color=lightgray]Ваши поступки, выполненные контракты и торговые сделки напрямую влияют на отношение ключевых сил региона.[/color]
-
-
-
----------------------------------------------------------
-
-👑 [b]Дворянский Дом Нортвуд:[/b] [color=%s]%+d[/color] (%s)
-
-  • Владеет замком Нортвуд, сторожевыми башнями и гарнизоном стражи.
-
-
-
-⚖️ [b]Лига Купцов Золотой Монеты:[/b] [color=%s]%+d[/color] (%s)
-
-  • Торговая гильдия караванщиков. Высокая репутация дает скидку на рынках.
-
-
-
-🌾 [b]Община Вольных Крестьян:[/b] [color=%s]%+d[/color] (%s)
-
-  • Жители деревни, ремесленники, фермеры и кузнецы Олдерии.
-
-
-
-🦹‍♂️ [b]Лесное Братство (Разбойники):[/b] [color=%s]%+d[/color] (%s)
-
-  • Лесные бандиты. При высокой репутации не нападают в глухих чащах.
-
-""" % [
-
-		"green" if crown_rep >= 0 else "red", crown_rep, _get_rep_tier_name(crown_rep),
-
-		"green" if merch_rep >= 0 else "red", merch_rep, _get_rep_tier_name(merch_rep),
-
-		"green" if peas_rep >= 0 else "red", peas_rep, _get_rep_tier_name(peas_rep),
-
-		"green" if out_rep >= 0 else "red", out_rep, _get_rep_tier_name(out_rep)
-
-	]
-
-
-
-func _get_rep_tier_name(val: int) -> String:
-
-	if val >= 60: return "Почетный союзник ⭐"
-
-	elif val >= 20: return "Уважение и доверие 👍"
-
-	elif val >= -10: return "Нейтралитет ⚖️"
-
-	elif val >= -50: return "Подозрение и враждебность ⚠️"
-
-	else: return "Заклятый враг 💀"
-
-
-
-func _on_contract_selected(idx: int) -> void:
-
-	var id = contracts_list.get_item_metadata(idx)
-
-	selected_contract_id = id
-
-	var gm = _get_game_manager()
-
-	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	
-
-	if contracts_tab_idx == 0:
-
-		_render_contract_details(ContractDatabase.get_contract(id), false)
-
-	elif contracts_tab_idx == 1:
-
-		for c in p.active_contracts:
-
-			if c.get("id") == id:
-
-				_render_contract_details(c, true)
-
-				break
-
-	elif contracts_tab_idx == 2:
-
-		_render_faction_details(p)
-
-
+	if contracts_modal:
+		contracts_modal.refresh()
+
+# --- Мёртвый код контрактов удалён: рендер/факции/_get_rep_tier_name/_on_contract_selected
+#     перенесены в ui/modals/ContractsModal.gd (фасад). ---
 
 func _on_contract_action_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p or selected_contract_id == "": return
-
-	
-
-	if contracts_tab_idx == 0:
-
-		var ok = ContractManager.accept_contract(p, selected_contract_id)
-
+	if p == null or contracts_modal == null or contracts_modal.get_selected_id() == "":
+		return
+	var tab_idx = contracts_modal.get_tab_idx()
+	var sel_id = contracts_modal.get_selected_id()
+	if tab_idx == 0:
+		var ok = ContractManager.accept_contract(p, sel_id)
 		if ok:
-
-			var c = ContractDatabase.get_contract(selected_contract_id)
-
+			var c = ContractDatabase.get_contract(sel_id)
 			_log("[color=gold][b]📜 ВЗЯТ КОНТРАКТ: %s![/b][/color]" % c.get("title", ""))
-
 			_spawn_floating_text(player_pos, "📜 Новый контракт!", Color(1.0, 0.85, 0.2), 16)
-
-			_refresh_contracts_window()
-
-	elif contracts_tab_idx == 1:
-
-		var res = ContractManager.claim_reward(p, selected_contract_id)
-
+			contracts_modal.refresh()
+	elif tab_idx == 1:
+		var res = ContractManager.claim_reward(p, sel_id)
 		if not res.is_empty():
-
 			var c = res.get("contract", {})
-
 			_log("[color=gold][b]🎉 КОНТРАКТ СДАН: %s![/b] Получено: +%d золота, +%d славы.[/color]" % [c.get("title", ""), res.get("gold", 0), res.get("renown", 0)])
-
 			_spawn_spark_particles(player_pos, Color.GOLD)
-
 			_spawn_floating_text(player_pos, "+%d Золота 💰" % res.get("gold", 0), Color.GOLD, 18)
-
-			selected_contract_id = ""
-
-			_refresh_contracts_window()
-
+			contracts_modal.refresh()
 
 
 func _on_contract_abandon_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p or selected_contract_id == "": return
-
-	ContractManager.abandon_contract(p, selected_contract_id)
-
+	if p == null or contracts_modal == null or contracts_modal.get_selected_id() == "":
+		return
+	var sel_id = contracts_modal.get_selected_id()
+	ContractManager.abandon_contract(p, sel_id)
 	_log("[color=gray]Вы отказались от выполнения контракта.[/color]")
+	contracts_modal.refresh()
 
-	selected_contract_id = ""
 
-	_refresh_contracts_window()
 
 
 
