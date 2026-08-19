@@ -46,9 +46,9 @@
 | 3. SkillsModal | `ui/modals/SkillsModal.gd` (read-only фасад). | ✅ `7f57532` |
 | 4. TradeModal | `ui/modals/TradeModal.gd` (фасад; мутации через `local_market`). | ✅ `39a52f4` |
 | 5. SmithingModal | `ui/modals/SmithingModal.gd` (фасад; мутации `player_data`, XP→колбэк). | ✅ `85286e3` |
-| 6. ContractsModal | `ui/modals/ContractsModal.gd` — **фасад готов, НЕ подключён**. Зона рискованная (22 ф-и, глубокая мутация `ContractManager`/квестов). Возврат к HEAD после того, как гигантский патч случайно обрезал `_update_quest_tracker`. План: аккуратный повторной подключение отдельным малым патчем (не трогать `_update_quest_tracker`). | ⬜ фасад готов, ⬜ wiring |
-| 7. PartyModal | `_build_party_modal` (13 функций). | ⬜ |
-| 8. EstateModal | `_build_estate_modal` (15 функций). | ⬜ |
+| 6. ContractsModal | `ui/modals/ContractsModal.gd` (фасад; мутации через `ContractManager`). | ✅ `6355ea7` |
+| 7. PartyModal | `ui/modals/PartyModal.gd` (фасад; мутации `party_members` через `PartyManager`+HUD). HUD `_update_party_hud` осталась в монолите. | ✅ `7f4be69` |
+| 8. EstateModal | `ui/modals/EstateModal.gd` (фасад; мутации `p.*` через `EstateManager`+HUD `_sync_estate_workers`). | ✅ `dfbb9ef` |
 | 9. SettlementModal | `_build_settlement_modal`. | ⬜ |
 | 10. Remaining modals | event, construction, chest, dialogue, origin, citizen_shop, alchemy, stable, shipyard, bard, dog. | ⬜ |
 | 11. CombatController | `_hit_npc/_hit_wildlife/_spawn_slash_effect/_spawn_projectile` → `combat/`. | ⬜ |
