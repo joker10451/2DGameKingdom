@@ -96,6 +96,7 @@ const TradeModalScript = preload("res://src/ui/modals/TradeModal.gd")
 const SmithingModalScript = preload("res://src/ui/modals/SmithingModal.gd")
 const ContractsModalScript = preload("res://src/ui/modals/ContractsModal.gd")
 const PartyModalScript = preload("res://src/ui/modals/PartyModal.gd")
+const EstateModalScript = preload("res://src/ui/modals/EstateModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -367,6 +368,9 @@ var smithing_modal: RefCounted
 var contracts_modal: RefCounted
 
 var party_modal: RefCounted
+
+var estate_modal: RefCounted
+
 
 
 
@@ -4654,13 +4658,23 @@ func _build_ui_hud() -> void:
 	smithing_modal = SmithingModalScript.new()
 	smithing_modal.build(canvas, smith_recipes, _get_game_manager, _log, _award_skill_xp, _close_all_modals)
 
-	_build_event_modal(canvas)
+	# Поместье вынесено в ui/modals/EstateModal.gd (фасад; мутации через EstateManager+колбэки HUD).
+	estate_modal = EstateModalScript.new()
+	estate_modal.build(
+		canvas,
+		_get_game_manager,
+		_log,
+		_spawn_floating_text,
+		_spawn_spark_particles,
+		_on_estate_action_pressed, # on_action (buy_deed/rest/hire/build)
+		_on_estate_take_all_pressed, # on_take_all
+		_close_all_modals          # on_close
+	)
 
 	_build_construction_modal(canvas)
 
-	_build_chest_modal(canvas)
 
-	_build_estate_modal(canvas)
+	_build_chest_modal(canvas)
 
 	_build_settlement_modal(canvas)
 
@@ -5610,6 +5624,7 @@ func _close_all_modals() -> void:
 	if smithing_modal: smithing_modal.close()
 	if contracts_modal: contracts_modal.close()
 	if party_modal: party_modal.close()
+	if estate_modal: estate_modal.close()
 
 	if party_panel: party_panel.visible = false
 
@@ -6656,739 +6671,115 @@ func _sync_estate_workers() -> void:
 
 
 
-func _build_estate_modal(canvas: CanvasLayer) -> void:
-
-	estate_panel = PanelContainer.new()
-
-	estate_panel.position = Vector2(160, 50)
-
-	estate_panel.custom_minimum_size = Vector2(960, 560)
-
-	estate_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
-
-	estate_panel.visible = false
-
-	canvas.add_child(estate_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	estate_panel.add_child(vbox)
-
-	
-
-	# Шапка
-
-	var top_h = HBoxContainer.new()
-
-	top_h.add_theme_constant_override("separation", 12)
-
-	vbox.add_child(top_h)
-
-	
-
-	var title = Label.new()
-
-	title.text = "🏰 ФЕОДАЛЬНОЕ ПОМЕСТЬЕ И ЗЕМЛЕВЛАДЕНИЕ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	top_h.add_child(title)
-
-	
-
-	var spacer = Control.new()
-
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	top_h.add_child(spacer)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "✖ Закрыть [ ESC ]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	top_h.add_child(close_btn)
-
-	
-
-	# Вкладки
-
-	var tab_bar = HBoxContainer.new()
-
-	tab_bar.add_theme_constant_override("separation", 10)
-
-	vbox.add_child(tab_bar)
-
-	
-
-	var tab_main_btn = Button.new()
-
-	tab_main_btn.text = "📊 Обзор и Склад усадьбы"
-
-	_style_button(tab_main_btn)
-
-	tab_main_btn.pressed.connect(func():
-
-		estate_tab_idx = 0
-
-		selected_estate_item_id = ""
-
-		_refresh_estate_window()
-
-	)
-
-	tab_bar.add_child(tab_main_btn)
-
-	
-
-	var tab_workers_btn = Button.new()
-
-	tab_workers_btn.text = "👨‍🌾 Найм батраков"
-
-	_style_button(tab_workers_btn)
-
-	tab_workers_btn.pressed.connect(func():
-
-		estate_tab_idx = 1
-
-		selected_estate_item_id = ""
-
-		_refresh_estate_window()
-
-	)
-
-	tab_bar.add_child(tab_workers_btn)
-
-	
-
-	var tab_upgrades_btn = Button.new()
-
-	tab_upgrades_btn.text = "🏡 Постройки и Улучшения"
-
-	_style_button(tab_upgrades_btn)
-
-	tab_upgrades_btn.pressed.connect(func():
-
-		estate_tab_idx = 2
-
-		selected_estate_item_id = ""
-
-		_refresh_estate_window()
-
-	)
-
-	tab_bar.add_child(tab_upgrades_btn)
-
-	
-
-	# Тело
-
-	var body_h = HBoxContainer.new()
-
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	body_h.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(body_h)
-
-	
-
-	# Левая колонка: Список элементов
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(350, 410)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	body_h.add_child(left_p)
-
-	
-
-	estate_list = ItemList.new()
-
-	estate_list.custom_minimum_size = Vector2(330, 390)
-
-	estate_list.item_selected.connect(_on_estate_item_selected)
-
-	left_p.add_child(estate_list)
-
-	
-
-	# Правая колонка: Информация и действия
-
-	var right_v = VBoxContainer.new()
-
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	right_v.add_theme_constant_override("separation", 10)
-
-	body_h.add_child(right_v)
-
-	
-
-	var right_p = PanelContainer.new()
-
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	right_v.add_child(right_p)
-
-	
-
-	estate_info_label = RichTextLabel.new()
-
-	estate_info_label.bbcode_enabled = true
-
-	estate_info_label.custom_minimum_size = Vector2(550, 330)
-
-	right_p.add_child(estate_info_label)
-
-	
-
-	var act_h = HBoxContainer.new()
-
-	act_h.add_theme_constant_override("separation", 12)
-
-	right_v.add_child(act_h)
-
-	
-
-	estate_action_btn = Button.new()
-
-	estate_action_btn.text = "📜 Выкупить Грамоту на Землю (100 з.)"
-
-	estate_action_btn.custom_minimum_size = Vector2(260, 38)
-
-	_style_button(estate_action_btn)
-
-	estate_action_btn.pressed.connect(_on_estate_action_pressed)
-
-	act_h.add_child(estate_action_btn)
-
-	
-
-	estate_take_all_btn = Button.new()
-
-	estate_take_all_btn.text = "📦 Забрать все со склада"
-
-	estate_take_all_btn.custom_minimum_size = Vector2(200, 38)
-
-	_style_button(estate_take_all_btn)
-
-	estate_take_all_btn.pressed.connect(_on_estate_take_all_pressed)
-
-	act_h.add_child(estate_take_all_btn)
-
+func _build_estate_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: pomestye vyneseno v ui/modals/EstateModal.gd.
+	# Sozdanie v _build_ui_hud() cherez estate_modal.build().
+	pass
 
 
 func _toggle_estate_menu() -> void:
-
-	if estate_panel.visible:
-
+	if estate_modal == null:
+		return
+	if estate_modal.is_open():
 		_close_all_modals()
-
 	else:
-
 		_close_all_modals()
-
 		is_ui_open = true
-
-		estate_panel.visible = true
-
-		estate_tab_idx = 0
-
-		_refresh_estate_window()
-
+		estate_modal.open()
 
 
 func _refresh_estate_window() -> void:
+	if estate_modal:
+		estate_modal.refresh()
 
-	var gm = _get_game_manager()
 
-	var p: CharacterData = gm.player_data if gm else null
+func _render_worker_details(_w: Dictionary) -> void:
+	# Render teper vnutri EstateModal.
+	pass
 
-	if not p: return
 
-	
+func _render_upgrade_details(_u: Dictionary, _is_built: bool) -> void:
+	# Render teper vnutri EstateModal.
+	pass
 
-	EstateManager.ensure_player_estate(p)
 
-	estate_list.clear()
-
-	
-
-	if not p.has_estate:
-
-		estate_list.add_item("📜 Земельный надел Олдерии")
-
-		estate_action_btn.visible = true
-
-		estate_action_btn.text = "📜 Выкупить Грамоту на Землю (100 з.)"
-
-		estate_take_all_btn.visible = false
-
-		
-
-		estate_info_label.text = """[b][font_size=18]🏰 Восточные Угодья Олдерии (Земельный надел)[/font_size][/b]
-
-[color=gold]Статус: Свободная феодальная земля[/color]
-
-
-
-Живописный холм у восточной реки с плодородной почвой, дубовой рощей и рудной жилой.
-
-Выкупив Грамоту на Землю у Лорда или Старосты, вы сможете:
-
- • Нанимать крестьян-батраков для автоматизированного сбора дерева, руды, мяса и муки.
-
- • Возвести Барский Дом для мгновенного отдыха и снятия усталости.
-
- • Построить Курятник и Хлев для получения ежедневного пассивного дохода золотом.
-
- • Складывать всю готовую продукцию в Центральный Склад усадьбы.
-
-
-
----------------------------------------------------------
-
-[b]💰 Стоимость покупки: [color=gold]%d золотых[/color][/b] (У вас: %d з.)
-
-""" % [EstateDatabase.LAND_DEED_COST, p.gold]
-
-		return
-
-		
-
-	# Игрок владеет поместьем
-
-	if estate_tab_idx == 0:
-
-		# Обзор и Склад
-
-		estate_take_all_btn.visible = true
-
-		estate_action_btn.visible = p.estate_upgrades.has("manor_house")
-
-		estate_action_btn.text = "🛏️ Отдохнуть в Барском Доме"
-
-		
-
-		var storage_items = p.estate_storage.keys()
-
-		if storage_items.size() > 0:
-
-			for it_id in storage_items:
-
-				var count = p.estate_storage[it_id]
-
-				var it = ItemDatabase.get_item(it_id)
-
-				estate_list.add_item("%s %s x%d" % [it.get("icon", "📦"), it.get("name", it_id), count])
-
-		else:
-
-			estate_list.add_item("📦 Склад пуст")
-
-			
-
-		var upgrades_str = "Нет построек"
-
-		if p.estate_upgrades.size() > 0:
-
-			var u_names: Array = []
-
-			for u_id in p.estate_upgrades:
-
-				var u_def = EstateDatabase.get_upgrade_def(u_id)
-
-				u_names.append("%s %s" % [u_def.get("icon", "🏡"), u_def.get("name", u_id)])
-
-			upgrades_str = ", ".join(u_names)
-
-			
-
-		var workers_str = "Нет наемных рабочих"
-
-		if p.estate_workers.size() > 0:
-
-			var w_names: Array = []
-
-			for w_type in p.estate_workers:
-
-				var w_def = EstateDatabase.get_worker_def(w_type)
-
-				w_names.append("%s %s" % [w_def.get("icon", "👨‍🌾"), w_def.get("name", w_type)])
-
-			workers_str = "\n • " + "\n • ".join(w_names)
-
-			
-
-		estate_info_label.text = """[b][font_size=18]🏰 Ваше Феодальное Поместье (Уровень %d)[/font_size][/b]
-
-[color=green]Статус: Земля в вашей законной собственности[/color]
-
-
-
-[b]🏡 Возведенные строения:[/b] %s
-
-[b]👨‍🌾 Нанятые батраки (%d/%d):[/b] %s
-
-
-
----------------------------------------------------------
-
-[b]📦 Склад поместья:[/b]
-
-Каждые 3 игровых часа нанятые рабочие приносят готовую продукцию на склад усадьбы.
-
-Нажмите [b]«Забрать все со склада»[/b], чтобы переместить ресурсы в свой инвентарь.
-
-""" % [p.estate_level, upgrades_str, p.estate_workers.size(), EstateManager.MAX_WORKERS, workers_str]
-
-
-
-	elif estate_tab_idx == 1:
-
-		# Найм рабочих
-
-		estate_take_all_btn.visible = false
-
-		estate_action_btn.visible = true
-
-		estate_action_btn.text = "👨‍🌾 Нанять рабочего"
-
-		
-
-		for w_id in EstateDatabase.WORKERS.keys():
-
-			var w = EstateDatabase.WORKERS[w_id]
-
-			estate_list.add_item("%s %s (%d з.)" % [w.get("icon", "👨‍🌾"), w.get("name", ""), w.get("hire_cost", 25)])
-
-			estate_list.set_item_metadata(estate_list.get_item_count() - 1, w_id)
-
-			
-
-		if selected_estate_item_id == "" or not EstateDatabase.WORKERS.has(selected_estate_item_id):
-
-			selected_estate_item_id = "farmer"
-
-		_render_worker_details(EstateDatabase.get_worker_def(selected_estate_item_id))
-
-
-
-	elif estate_tab_idx == 2:
-
-		# Улучшения
-
-		estate_take_all_btn.visible = false
-
-		estate_action_btn.visible = true
-
-		estate_action_btn.text = "🔨 Возвести постройку"
-
-		
-
-		for u_id in EstateDatabase.UPGRADES.keys():
-
-			var u = EstateDatabase.UPGRADES[u_id]
-
-			var built = p.estate_upgrades.has(u_id)
-
-			estate_list.add_item("%s %s %s" % [u.get("icon", "🏡"), u.get("name", ""), "✅" if built else ""])
-
-			estate_list.set_item_metadata(estate_list.get_item_count() - 1, u_id)
-
-			
-
-		if selected_estate_item_id == "" or not EstateDatabase.UPGRADES.has(selected_estate_item_id):
-
-			selected_estate_item_id = "manor_house"
-
-		_render_upgrade_details(EstateDatabase.get_upgrade_def(selected_estate_item_id), p.estate_upgrades.has(selected_estate_item_id))
-
-
-
-func _render_worker_details(w: Dictionary) -> void:
-
-	if w.is_empty(): return
-
-	var yields_str = ""
-
-	for it_id in w.get("yield", {}).keys():
-
-		var it = ItemDatabase.get_item(it_id)
-
-		yields_str += "%s %s x%d  " % [it.get("icon", "📦"), it.get("name", it_id), w["yield"][it_id]]
-
-		
-
-	estate_info_label.text = """[b][font_size=18]%s %s[/font_size][/b]
-
-[color=lightgray]%s[/color]
-
-
-
----------------------------------------------------------
-
-[b]📦 Производство каждые 3 игровых часа:[/b]
-
-%s
-
-
-
-[b]💰 Финансовые условия:[/b]
-
- • Стоимость найма: [color=gold]%d золотых[/color]
-
- • Ежедневное жалование: [color=cyan]%d золотых / день (в 07:00)[/color]
-
-""" % [
-
-		w.get("icon", "👨‍🌾"), w.get("name", ""),
-
-		w.get("desc", ""),
-
-		yields_str,
-
-		w.get("hire_cost", 25),
-
-		w.get("daily_wage", 3)
-
-	]
-
-
-
-func _render_upgrade_details(u: Dictionary, is_built: bool) -> void:
-
-	if u.is_empty(): return
-
-	var status = "[color=green]УЖЕ ВОЗВЕДЕНО В УСАДЬБЕ ✅[/color]" if is_built else "[color=yellow]ДОСТУПНО ДЛЯ ПОСТРОЙКИ[/color]"
-
-	var cost = u.get("cost", {})
-
-	
-
-	estate_info_label.text = """[b][font_size=18]%s %s[/font_size][/b]
-
-Статус: %s
-
-
-
-%s
-
-
-
----------------------------------------------------------
-
-[b]🔨 Требуемые материалы и средства:[/b]
-
- • Золото: [color=gold]%d з.[/color]
-
- • Дубовые бревна: %d шт.
-
- • Обрезные доски: %d шт.
-
-""" % [
-
-		u.get("icon", "🏡"), u.get("name", ""),
-
-		status,
-
-		u.get("desc", ""),
-
-		cost.get("gold", 0),
-
-		cost.get("wood", 0),
-
-		cost.get("plank", 0)
-
-	]
-
-	estate_action_btn.disabled = is_built
-
-
-
-func _on_estate_item_selected(idx: int) -> void:
-
-	var id = estate_list.get_item_metadata(idx)
-
-	if id:
-
-		selected_estate_item_id = id
-
-		if estate_tab_idx == 1:
-
-			_render_worker_details(EstateDatabase.get_worker_def(id))
-
-		elif estate_tab_idx == 2:
-
-			var gm = _get_game_manager()
-
-			var p: CharacterData = gm.player_data if gm else null
-
-			var is_built = p.estate_upgrades.has(id) if p else false
-
-			_render_upgrade_details(EstateDatabase.get_upgrade_def(id), is_built)
-
+func _on_estate_item_selected(_idx: int) -> void:
+	# Vybor v spiske teper vnutri EstateModal (item_selected signal).
+	pass
 
 
 func _on_estate_action_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	
+	if p == null or estate_modal == null:
+		return
+	var tab_idx = estate_modal.get_tab_idx()
+	var sel_id = estate_modal.get_selected_id()
 
 	if not p.has_estate:
-
 		var res = EstateManager.buy_land_deed(p)
-
 		if res.get("success", false):
-
 			_log("[color=gold][b]🎉 ПОЗДРАВЛЯЕМ! Вы выкупили Грамоту на Землю и стали владельцем Феодального Поместья![/b][/color]")
-
 			_spawn_spark_particles(player_pos, Color.GOLD)
-
 			_spawn_floating_text(player_pos, "🏰 ВЛАДЕЛЕЦ ПОМЕСТЬЯ!", Color.GOLD, 20)
-
 			_sync_estate_workers()
-
-			_refresh_estate_window()
-
+			estate_modal.refresh()
 		else:
-
 			_log("[color=red]%s[/color]" % res.get("reason", "Ошибка покупки!"))
-
 		return
 
-		
-
-	if estate_tab_idx == 0:
-
+	if tab_idx == 0:
 		# Отдых в барском доме
-
 		if p.estate_upgrades.has("manor_house"):
-
 			player_fatigue = 0.0
-
 			player_stamina = player_max_stamina
-
 			player_hp = player_max_hp
-
 			_spawn_spark_particles(player_pos, Color(0.4, 0.9, 1.0))
-
 			_spawn_floating_text(player_pos, "💤 Идеальный отдых! (Усталость 0%)", Color.CYAN, 18)
-
 			_log("[color=cyan]🏡 Вы сладко выспались в Барском Доме. Все силы и здоровье полностью восстановлены![/color]")
-
 			_close_all_modals()
-
-			
-
-	elif estate_tab_idx == 1:
-
+	elif tab_idx == 1:
 		# Найм рабочего
-
-		var res = EstateManager.hire_worker(p, selected_estate_item_id)
-
+		var res = EstateManager.hire_worker(p, sel_id)
 		if res.get("success", false):
-
 			var w = res["worker"]
-
 			_log("[color=gold]👨‍🌾 В поместье нанят новый работник: %s %s![/color]" % [w.get("icon", "👨‍🌾"), w.get("name", "")])
-
 			_spawn_spark_particles(player_pos, Color.LIGHT_GREEN)
-
 			_sync_estate_workers()
-
-			_refresh_estate_window()
-
+			estate_modal.refresh()
 		else:
-
 			_log("[color=red]%s[/color]" % res.get("reason", "Ошибка найма!"))
-
-			
-
-	elif estate_tab_idx == 2:
-
+	elif tab_idx == 2:
 		# Постройка улучшения
-
-		var res = EstateManager.build_upgrade(p, selected_estate_item_id)
-
+		var res = EstateManager.build_upgrade(p, sel_id)
 		if res.get("success", false):
-
 			var u = res["upgrade"]
-
 			_log("[color=gold]🎉 В вашей усадьбе возведено: %s %s![/color]" % [u.get("icon", "🏡"), u.get("name", "")])
-
 			_spawn_spark_particles(player_pos, Color.GOLD)
-
 			_spawn_floating_text(player_pos, "🏡 Построено: " + u.get("name", ""), Color.GOLD, 18)
-
-			_refresh_estate_window()
-
+			estate_modal.refresh()
 		else:
-
 			_log("[color=red]%s[/color]" % res.get("reason", "Ошибка постройки!"))
 
 
-
 func _on_estate_take_all_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	
+	if p == null or estate_modal == null:
+		return
 
 	var taken = EstateManager.take_all_from_storage(p)
-
 	if taken.size() > 0:
-
 		var items_str = ""
-
 		for it_id in taken.keys():
-
 			var it = ItemDatabase.get_item(it_id)
-
 			items_str += "%s %s x%d  " % [it.get("icon", "📦"), it.get("name", it_id), taken[it_id]]
-
 		_log("[color=green]📦 Вы забрали со склада поместья: %s[/color]" % items_str)
-
 		_spawn_floating_text(player_pos, "📦 Ресурсы получены!", Color(0.3, 0.9, 0.4), 16)
-
-		_refresh_estate_window()
-
+		estate_modal.refresh()
 	else:
-
 		_log("[color=gray]На складе поместья пока ничего нет.[/color]")
 
-
-
-# =========================================================
-
-# ДВОРЯНСКИЕ ТИТУЛЫ, РЫЦАРСТВО И АУДИЕНЦИЯ У ЛОРДА 👑
-
-# =========================================================
 
 func _request_nobility_audience(lord_npc: Dictionary) -> void:
 
