@@ -59,14 +59,16 @@ static func get_tile_texture(type: String, size: int = 48) -> ImageTexture:
 		return _texture_cache[key]
 	
 	var file_path = "res://assets/sprites/world/tile_%s.png" % type
-	if FileAccess.file_exists(file_path):
-		var img = Image.load_from_file(file_path)
-		if img and not img.is_empty():
-			if img.get_width() != size or img.get_height() != size:
-				img.resize(size, size, Image.INTERPOLATE_NEAREST)
-			var itex = ImageTexture.create_from_image(img)
-			_texture_cache[key] = itex
-			return itex
+	if ResourceLoader.exists(file_path):
+		var loaded_tex = load(file_path) as Texture2D
+		if loaded_tex:
+			var img = loaded_tex.get_image()
+			if img and not img.is_empty():
+				if img.get_width() != size or img.get_height() != size:
+					img.resize(size, size, Image.INTERPOLATE_NEAREST)
+				var itex = ImageTexture.create_from_image(img)
+				_texture_cache[key] = itex
+				return itex
 	
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	
@@ -210,14 +212,16 @@ static func get_node_texture(type: String, size: int = 48) -> ImageTexture:
 		return _texture_cache[key]
 		
 	var file_path = "res://assets/sprites/world/%s.png" % type
-	if FileAccess.file_exists(file_path):
-		var img = Image.load_from_file(file_path)
-		if img and not img.is_empty():
-			if img.get_width() != size or img.get_height() != size:
-				img.resize(size, size, Image.INTERPOLATE_NEAREST)
-			var itex = ImageTexture.create_from_image(img)
-			_texture_cache[key] = itex
-			return itex
+	if ResourceLoader.exists(file_path):
+		var loaded_tex = load(file_path) as Texture2D
+		if loaded_tex:
+			var img = loaded_tex.get_image()
+			if img and not img.is_empty():
+				if img.get_width() != size or img.get_height() != size:
+					img.resize(size, size, Image.INTERPOLATE_NEAREST)
+				var itex = ImageTexture.create_from_image(img)
+				_texture_cache[key] = itex
+				return itex
 		
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var cx = size / 2.0
