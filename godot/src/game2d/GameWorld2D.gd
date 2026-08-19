@@ -95,6 +95,7 @@ const SkillsModalScript = preload("res://src/ui/modals/SkillsModal.gd")
 const TradeModalScript = preload("res://src/ui/modals/TradeModal.gd")
 const SmithingModalScript = preload("res://src/ui/modals/SmithingModal.gd")
 const ContractsModalScript = preload("res://src/ui/modals/ContractsModal.gd")
+const PartyModalScript = preload("res://src/ui/modals/PartyModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -364,6 +365,9 @@ var trade_modal: RefCounted
 var smithing_modal: RefCounted
 
 var contracts_modal: RefCounted
+
+var party_modal: RefCounted
+
 
 
 
@@ -4629,7 +4633,18 @@ func _build_ui_hud() -> void:
 		_close_all_modals
 	)
 
-	_build_party_modal(canvas)
+	# Дружина вынесена в ui/modals/PartyModal.gd (фасад; мутации через PartyManager+колбэки HUD).
+	party_modal = PartyModalScript.new()
+	party_modal.build(
+		canvas,
+		_get_game_manager,
+		_log,
+		_spawn_floating_text,
+		_spawn_spark_particles,
+		_on_party_action_pressed,  # on_action (hire)
+		_on_party_dismiss_pressed, # on_dismiss
+		_close_all_modals         # on_close
+	)
 
 	# Рынок вынесен в ui/modals/TradeModal.gd (фасад, мутации через local_market).
 	trade_modal = TradeModalScript.new()
@@ -5594,8 +5609,9 @@ func _close_all_modals() -> void:
 	if trade_modal: trade_modal.close()
 	if smithing_modal: smithing_modal.close()
 	if contracts_modal: contracts_modal.close()
+	if party_modal: party_modal.close()
 
-	if smith_panel: smith_panel.visible = false
+	if party_panel: party_panel.visible = false
 
 	if event_panel: event_panel.visible = false
 
@@ -6114,514 +6130,73 @@ func _update_party_movement_and_combat(delta: float) -> void:
 						w["hp"] -= d_val
 
 						_spawn_spark_particles(wildlife_positions[w_i], Color.GOLD)
-
-						_spawn_floating_text(wildlife_positions[w_i], "⚔️ -%d" % d_val, Color(1.0, 0.9, 0.3), 16)
-
-						_log("[color=gold]⚔️ %s нанес выпад по %s на %d урона![/color]" % [m["name"], w["name"], d_val])
-
-						
-
-						if w["hp"] <= 0.0:
-
-							_hit_wildlife(w_i)
-
-						break
-
-
-
-func _build_party_modal(canvas: CanvasLayer) -> void:
-
-	party_panel = PanelContainer.new()
-
-	party_panel.position = Vector2(160, 50)
-
-	party_panel.custom_minimum_size = Vector2(960, 560)
-
-	party_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
-
-	party_panel.visible = false
-
-	canvas.add_child(party_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	party_panel.add_child(vbox)
-
-	
-
-	# Верхняя шапка
-
-	var top_h = HBoxContainer.new()
-
-	top_h.add_theme_constant_override("separation", 12)
-
-	vbox.add_child(top_h)
-
-	
-
-	var title = Label.new()
-
-	title.text = "👥 УПРАВЛЕНИЕ ДРУЖИНОЙ И НАЕМНИКИ ТАВЕРНЫ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	top_h.add_child(title)
-
-	
-
-	var spacer = Control.new()
-
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	top_h.add_child(spacer)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "✖ Закрыть [ ESC ]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	top_h.add_child(close_btn)
-
-	
-
-	# Вкладки
-
-	var tab_bar = HBoxContainer.new()
-
-	tab_bar.add_theme_constant_override("separation", 10)
-
-	vbox.add_child(tab_bar)
-
-	
-
-	var tab_my_btn = Button.new()
-
-	tab_my_btn.text = "👥 Моя дружина"
-
-	_style_button(tab_my_btn)
-
-	tab_my_btn.pressed.connect(func():
-
-		party_tab_idx = 0
-
-		selected_party_id = ""
-
-		_refresh_party_window()
-
-	)
-
-	tab_bar.add_child(tab_my_btn)
-
-	
-
-	var tab_hire_btn = Button.new()
-
-	tab_hire_btn.text = "🍻 Наемники в таверне «Пьяный Вепрь»"
-
-	_style_button(tab_hire_btn)
-
-	tab_hire_btn.pressed.connect(func():
-
-		party_tab_idx = 1
-
-		selected_party_id = ""
-
-		_refresh_party_window()
-
-	)
-
-	tab_bar.add_child(tab_hire_btn)
-
-	
-
-	# Тело
-
-	var body_h = HBoxContainer.new()
-
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	body_h.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(body_h)
-
-	
-
-	# Левая колонка: Список бойцов
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(340, 410)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	body_h.add_child(left_p)
-
-	
-
-	party_list = ItemList.new()
-
-	party_list.custom_minimum_size = Vector2(320, 390)
-
-	party_list.item_selected.connect(_on_party_selected)
-
-	left_p.add_child(party_list)
-
-	
-
-	# Правая колонка: Детальная карточка
-
-	var right_v = VBoxContainer.new()
-
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	right_v.add_theme_constant_override("separation", 10)
-
-	body_h.add_child(right_v)
-
-	
-
-	var right_p = PanelContainer.new()
-
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	right_v.add_child(right_p)
-
-	
-
-	party_detail_label = RichTextLabel.new()
-
-	party_detail_label.bbcode_enabled = true
-
-	party_detail_label.custom_minimum_size = Vector2(560, 330)
-
-	right_p.add_child(party_detail_label)
-
-	
-
-	var act_h = HBoxContainer.new()
-
-	act_h.add_theme_constant_override("separation", 12)
-
-	right_v.add_child(act_h)
-
-	
-
-	party_action_btn = Button.new()
-
-	party_action_btn.text = "💰 Нанять в отряд"
-
-	party_action_btn.custom_minimum_size = Vector2(220, 38)
-
-	_style_button(party_action_btn)
-
-	party_action_btn.pressed.connect(_on_party_action_pressed)
-
-	act_h.add_child(party_action_btn)
-
-	
-
-	party_dismiss_btn = Button.new()
-
-	party_dismiss_btn.text = "Распустить бойца"
-
-	party_dismiss_btn.custom_minimum_size = Vector2(160, 38)
-
-	_style_button(party_dismiss_btn)
-
-	party_dismiss_btn.pressed.connect(_on_party_dismiss_pressed)
-
-	act_h.add_child(party_dismiss_btn)
-
+func _build_party_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: дружина вынесена в ui/modals/PartyModal.gd.
+	# Создание происходит в _build_ui_hud() через party_modal.build().
+	pass
 
 
 func _toggle_party_menu() -> void:
-
-	if party_panel.visible:
-
+	if party_modal == null:
+		return
+	if party_modal.is_open():
 		_close_all_modals()
-
 	else:
-
 		_close_all_modals()
-
 		is_ui_open = true
-
-		party_panel.visible = true
-
-		party_tab_idx = 0
-
-		_refresh_party_window()
-
+		party_modal.open()
 
 
 func _refresh_party_window() -> void:
+	if party_modal:
+		party_modal.refresh()
 
-	var gm = _get_game_manager()
 
-	var p: CharacterData = gm.player_data if gm else null
+func _render_party_member_details(_m: Dictionary, _is_hired: bool) -> void:
+	# Рендер теперь внутри PartyModal.
+	pass
 
-	if not p: return
 
-	
-
-	PartyManager.ensure_player_party(p)
-
-	party_list.clear()
-
-	
-
-	if party_tab_idx == 0:
-
-		# Моя дружина
-
-		for m in p.party_members:
-
-			party_list.add_item("%s %s" % [m.get("icon", "⚔️"), m.get("name", "Спутник")])
-
-			party_list.set_item_metadata(party_list.get_item_count() - 1, m.get("id", ""))
-
-			
-
-		party_action_btn.visible = false
-
-		party_dismiss_btn.visible = true
-
-		
-
-		if p.party_members.size() > 0:
-
-			if selected_party_id == "":
-
-				selected_party_id = p.party_members[0].get("id", "")
-
-			var cur_m: Dictionary = {}
-
-			for m in p.party_members:
-
-				if m.get("id") == selected_party_id:
-
-					cur_m = m
-
-					break
-
-			if cur_m.is_empty(): cur_m = p.party_members[0]
-
-			_render_party_member_details(cur_m, true)
-
-		else:
-
-			party_detail_label.text = "[center][color=gray]\n\nВ вашей дружине пока нет наемников.\nЗагляните в таверну «Пьяный Вепрь» [Вкладка 2]![/color][/center]"
-
-			party_dismiss_btn.visible = false
-
-			
-
-	elif party_tab_idx == 1:
-
-		# Доступные наемники
-
-		var av = PartyManager.get_available_mercenaries(p)
-
-		for m in av:
-
-			party_list.add_item("%s %s (%d з.)" % [m.get("icon", "⚔️"), m.get("name", "Наемник"), m.get("hire_cost", 30)])
-
-			party_list.set_item_metadata(party_list.get_item_count() - 1, m.get("id", ""))
-
-			
-
-		party_action_btn.visible = true
-
-		party_action_btn.text = "💰 Нанять в отряд"
-
-		party_dismiss_btn.visible = false
-
-		
-
-		if av.size() > 0:
-
-			if selected_party_id == "" or not PartyDatabase.MERCENARIES.has(selected_party_id):
-
-				selected_party_id = av[0].get("id", "")
-
-			_render_party_member_details(PartyDatabase.get_mercenary(selected_party_id), false)
-
-		else:
-
-			party_detail_label.text = "[center][color=gold]\n\nВсе доступные наемники уже приняты в вашу дружину!\nУправляйте ими во [Вкладке 1].[/color][/center]"
-
-			party_action_btn.visible = false
-
-
-
-func _render_party_member_details(m: Dictionary, is_hired: bool) -> void:
-
-	if m.is_empty(): return
-
-	var status = "[color=green]В ОТРИДЕ[/color]" if is_hired else "[color=yellow]ДОСТУПЕН ДЛЯ НАЙМА[/color]"
-
-	
-
-	party_detail_label.text = """[b][font_size=18]%s %s[/font_size][/b]
-
-[color=gold]%s[/color] | Статус: %s
-
-[color=lightgray]%s[/color]
-
-
-
----------------------------------------------------------
-
-[b]📊 Боевые показатели:[/b]
-
- • Здоровье: [color=red]%.0f / %.0f HP[/color]
-
- • Урон в бою: [color=gold]%.0f ед.[/color] | Броня: [color=lightblue]%.0f DEF[/color]
-
- • Оружие: %s | Щит/Снаряжение: %s
-
-
-
-[b]✨ Особый навык: [color=yellow]%s[/color][/b]
-
-%s
-
-
-
----------------------------------------------------------
-
-[b]💰 Финансовые условия:[/b]
-
- • Стоимость найма: [color=gold]%d золотых[/color]
-
- • Ежедневное жалование: [color=cyan]%d золотых / день (в 07:00)[/color]
-
-""" % [
-
-		m.get("icon", "⚔️"), m.get("name", ""),
-
-		m.get("title", ""), status,
-
-		m.get("desc", ""),
-
-		m.get("hp", 80.0), m.get("max_hp", 80.0),
-
-		m.get("dmg", 20.0), m.get("def", 10.0),
-
-		m.get("weapon", "Меч"), m.get("shield", "Щит"),
-
-		m.get("perk_name", "Боевое мастерство"), m.get("perk_desc", ""),
-
-		m.get("hire_cost", 30), m.get("daily_wage", 5)
-
-	]
-
-
-
-func _on_party_selected(idx: int) -> void:
-
-	var id = party_list.get_item_metadata(idx)
-
-	selected_party_id = id
-
-	var gm = _get_game_manager()
-
-	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	
-
-	if party_tab_idx == 0:
-
-		for m in p.party_members:
-
-			if m.get("id") == id:
-
-				_render_party_member_details(m, true)
-
-				break
-
-	elif party_tab_idx == 1:
-
-		_render_party_member_details(PartyDatabase.get_mercenary(id), false)
-
+func _on_party_selected(_idx: int) -> void:
+	# Выбор в списке теперь внутри PartyModal (item_selected сигнал).
+	pass
 
 
 func _on_party_action_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p or selected_party_id == "": return
-
-	
-
-	if party_tab_idx == 1:
-
-		var res = PartyManager.hire_mercenary(p, selected_party_id)
-
+	if p == null or party_modal == null or party_modal.get_selected_id() == "":
+		return
+	var tab_idx = party_modal.get_tab_idx()
+	var sel_id = party_modal.get_selected_id()
+	if tab_idx == 1:
+		var res = PartyManager.hire_mercenary(p, sel_id)
 		if res.get("success", false):
-
 			var m = res["mercenary"]
-
 			_log("[color=gold][b]🎉 В ДРУЖИНУ ПРИНЯТ: %s %s![/b][/color]" % [m.get("icon", "⚔️"), m.get("name", "")])
-
 			_spawn_spark_particles(player_pos, Color.GOLD)
-
 			_spawn_floating_text(player_pos, "👥 Новый соратник: " + m.get("name", ""), Color.GOLD, 18)
-
 			_sync_party_sprites()
-
 			_update_party_hud()
-
-			selected_party_id = ""
-
-			_refresh_party_window()
-
+			party_modal.refresh()
 		else:
-
 			_log("[color=red]%s[/color]" % res.get("reason", "Ошибка найма!"))
 
 
-
 func _on_party_dismiss_pressed() -> void:
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
-	if not p or selected_party_id == "": return
-
-	
-
-	var ok = PartyManager.dismiss_mercenary(p, selected_party_id)
-
+	if p == null or party_modal == null or party_modal.get_selected_id() == "":
+		return
+	var sel_id = party_modal.get_selected_id()
+	var ok = PartyManager.dismiss_mercenary(p, sel_id)
 	if ok:
-
 		_log("[color=gray]Вы распустили наемника из своего отряда.[/color]")
-
 		_sync_party_sprites()
-
 		_update_party_hud()
+		party_modal.refresh()
 
-		selected_party_id = ""
 
-		_refresh_party_window()
 
 
 
