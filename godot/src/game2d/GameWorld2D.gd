@@ -91,6 +91,7 @@ const RegionalDiplomacySystemScript = preload("res://src/world/RegionalDiplomacy
 const FactionWarfareSystemScript = preload("res://src/world/FactionWarfareSystem.gd")
 const EnhancedArtGeneratorScript = preload("res://src/world/EnhancedArtGenerator.gd")
 const InventoryModalScript = preload("res://src/ui/modals/InventoryModal.gd")
+const SkillsModalScript = preload("res://src/ui/modals/SkillsModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -352,6 +353,8 @@ var inv_details_label: RichTextLabel
 var selected_inv_item: String = ""
 
 var inventory_modal: RefCounted
+
+var skills_modal: RefCounted
 
 
 
@@ -4600,7 +4603,9 @@ func _build_ui_hud() -> void:
 	)
 	inventory_modal.item_selected.connect(_on_inv_item_selected)
 
-	_build_skills_modal(canvas)
+	# Навыки вынесены в ui/modals/SkillsModal.gd (read-only фасад).
+	skills_modal = SkillsModalScript.new()
+	skills_modal.build(canvas, _pd, SkillSystem, _close_all_modals)
 
 	_build_contracts_modal(canvas)
 
@@ -5998,367 +6003,44 @@ func _award_skill_xp(skill_id: String, amount: float) -> void:
 
 # --- КНИГА НАВЫКОВ И МАСТЕРСТВА [K] ---
 
-func _build_skills_modal(canvas: CanvasLayer) -> void:
-
-	skills_panel = PanelContainer.new()
-
-	skills_panel.position = Vector2(180, 55)
-
-	skills_panel.custom_minimum_size = Vector2(920, 550)
-
-	skills_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
-
-	skills_panel.visible = false
-
-	canvas.add_child(skills_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	skills_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "📜 КНИГА НАВЫКОВ И МАСТЕРСТВА (SOULASH 2 STYLE)"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	var hbox = HBoxContainer.new()
-
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	hbox.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(hbox)
-
-	
-
-	# Левая колонка: Профиль героя и Характеристики
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(300, 430)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	hbox.add_child(left_p)
-
-	
-
-	skills_char_profile = RichTextLabel.new()
-
-	skills_char_profile.bbcode_enabled = true
-
-	skills_char_profile.custom_minimum_size = Vector2(280, 410)
-
-	left_p.add_child(skills_char_profile)
-
-	
-
-	# Правая колонка: Список навыков со шкалами опыта
-
-	var right_vbox = VBoxContainer.new()
-
-	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(right_vbox)
-
-	
-
-	var scroll = ScrollContainer.new()
-
-	scroll.custom_minimum_size = Vector2(580, 430)
-
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_vbox.add_child(scroll)
-
-	
-
-	skills_list_vbox = VBoxContainer.new()
-
-	skills_list_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	skills_list_vbox.add_theme_constant_override("separation", 8)
-
-	scroll.add_child(skills_list_vbox)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc] / [K]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_skills_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI навыков вынесен в ui/modals/SkillsModal.gd.
+	# Создание происходит в _build_ui_hud() через skills_modal.build().
+	pass
 
 
 func _toggle_skills() -> void:
-
-	if skills_panel.visible:
-
+	if skills_modal == null:
+		return
+	if skills_modal.is_open():
 		_close_all_modals()
-
 	else:
-
 		_close_all_modals()
-
 		is_ui_open = true
-
-		skills_panel.visible = true
-
-		_refresh_skills_window()
-
+		skills_modal.open()
 
 
 func _refresh_skills_window() -> void:
-
-	var gm = _get_game_manager()
-
-	var p: CharacterData = gm.player_data if gm else null
-
-	if not p: return
-
-	p.ensure_skills()
-
-	
-
-	# Обновление профиля слева
-
-	skills_char_profile.text = """[b][color=gold]%s[/color][/b]
-
-[color=gray]Роль:[/color] %s
-
-[color=gray]Фракция:[/color] Вольный народ
-
-
-
-[b]⚜️ Характеристики:[/b]
-
-• [color=lightcoral]💪 Сила:[/color] %d (Урон, рубка)
-
-• [color=lightgreen]🦶 Ловкость:[/color] %d (Крит, бег)
-
-• [color=lightblue]🧠 Интеллект:[/color] %d (Кузница, ремесло)
-
-• [color=orange]🗣️ Харизма:[/color] %d (Торговля)
-
-
-
-[b]🏆 Репутация и статус:[/b]
-
-• 💰 Золото: [color=gold]%d[/color]
-
-• ⭐ Слава: %d
-
-• ⚜️ Честь: %d
-
-
-
-[color=yellow]💡 Навыки растут от реальных действий в мире![/color]""" % [
-
-		p.character_name,
-
-		p.current_role,
-
-		p.strength,
-
-		p.agility,
-
-		p.intelligence,
-
-		p.charisma,
-
-		p.gold,
-
-		p.renown,
-
-		p.honor
-
-	]
-
-	
-
-	# Очистка и заполнение списка навыков справа
-
-	for c in skills_list_vbox.get_children():
-
-		c.queue_free()
-
-	
-
-	for skill_id in SkillSystem.SKILL_DEFS.keys():
-
-		var def = SkillSystem.SKILL_DEFS[skill_id]
-
-		var s_data = p.skills.get(skill_id, {})
-
-		var lvl = s_data.get("level", 1)
-
-		var xp = s_data.get("xp", 0.0)
-
-		var req_xp = SkillSystem.get_xp_required(lvl)
-
-		
-
-		var card = PanelContainer.new()
-
-		card.custom_minimum_size = Vector2(560, 68)
-
-		card.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.12, 0.14, 0.18, 0.9), Color(0.5, 0.42, 0.22), 1, 4))
-
-		skills_list_vbox.add_child(card)
-
-		
-
-		var c_vbox = VBoxContainer.new()
-
-		c_vbox.add_theme_constant_override("separation", 3)
-
-		card.add_child(c_vbox)
-
-		
-
-		var top_h = HBoxContainer.new()
-
-		c_vbox.add_child(top_h)
-
-		
-
-		var name_lbl = Label.new()
-
-		name_lbl.text = "%s %s" % [def.get("icon", "⭐"), def.get("name", skill_id)]
-
-		name_lbl.add_theme_font_size_override("font_size", 14)
-
-		name_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
-
-		top_h.add_child(name_lbl)
-
-		
-
-		var spacer = Control.new()
-
-		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-		top_h.add_child(spacer)
-
-		
-
-		var lvl_lbl = Label.new()
-
-		lvl_lbl.text = "Уровень %d" % lvl
-
-		lvl_lbl.add_theme_font_size_override("font_size", 13)
-
-		lvl_lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-
-		top_h.add_child(lvl_lbl)
-
-		
-
-		# Прогресс-бар опыта
-
-		var bar = ProgressBar.new()
-
-		bar.custom_minimum_size = Vector2(540, 16)
-
-		bar.value = (xp / req_xp) * 100.0
-
-		bar.show_percentage = false
-
-		var b_bg = _make_medieval_panel_style(Color(0.06, 0.07, 0.09, 0.9), Color(0.2, 0.18, 0.12), 1, 2)
-
-		var b_fill = _make_medieval_panel_style(Color(0.85, 0.65, 0.18), Color(0.98, 0.82, 0.35), 1, 2)
-
-		bar.add_theme_stylebox_override("background", b_bg)
-
-		bar.add_theme_stylebox_override("fill", b_fill)
-
-		
-
-		var bar_lbl = Label.new()
-
-		bar_lbl.text = "%.0f / %.0f XP" % [xp, req_xp]
-
-		bar_lbl.position = Vector2(10, -2)
-
-		bar_lbl.add_theme_font_size_override("font_size", 10)
-
-		bar_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-
-		bar.add_child(bar_lbl)
-
-		c_vbox.add_child(bar)
-
-		
-
-		# Перки и описание бонуса
-
-		var perk_txt = ""
-
-		for p_item in s_data.get("perks", []):
-
-			if p_item.get("unlocked", false):
-
-				perk_txt += " [color=gold]✨ %s[/color]" % p_item["name"]
-
-			else:
-
-				perk_txt += " [color=gray]🔒 %s (Ур. %d)[/color]" % [p_item["name"], p_item["req_level"]]
-
-		
-
-		var info_lbl = RichTextLabel.new()
-
-		info_lbl.bbcode_enabled = true
-
-		info_lbl.fit_content = true
-
-		info_lbl.text = "[color=lightgray]%s[/color]%s" % [def.get("desc", ""), perk_txt]
-
-		c_vbox.add_child(info_lbl)
+	if skills_modal:
+		skills_modal.refresh()
 
 
 
 func _log(msg: String) -> void:
-
 	if log_box:
-
 		log_box.append_text(msg + "\n")
 
 
 
 func _get_game_manager() -> Node:
-
 	return get_node_or_null("/root/GameManager")
 
 
 
 func _get_time_manager() -> Node:
-
 	return get_node_or_null("/root/TimeManager")
 
 
-
-# =========================================================
-
-# ФЕОДАЛЬНЫЕ КОНТРАКТЫ, КВЕСТЫ И РЕПУТАЦИЯ [ Q ]
 
 # =========================================================
 
