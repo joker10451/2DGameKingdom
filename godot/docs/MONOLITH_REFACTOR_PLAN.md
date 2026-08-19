@@ -37,7 +37,27 @@
 - Крупными мазками: брать связанную зону (3–6 карточек), не дробить по одной функции.
 - Не создавать документы ради документов — этот план живёт только как техэнциклопедия.
 
+## Прогресс (обновляется по ходу)
+
+| Шаг | Что сделано | Статус |
+|---|---|---|
+| 1. UI-хелперы | `ui/UIHelpers.gd` (autoload): `panel_style()`, `style_button()`. Монолит делегирует. | ✅ `19e6890` |
+| 2. InventoryModal | `ui/modals/InventoryModal.gd` (RefCounted-фасад + колбэки эффектов). | ✅ `e1573c7` |
+| 3. SkillsModal | `ui/modals/SkillsModal.gd` (read-only фасад). | ✅ `7f57532` |
+| 4. TradeModal | `_build_trade_modal` (рынок) — мутирует gold/инвентарь, сложнее. | ⬜ |
+| 5. SmithingModal | `_build_smithing_modal` — крафт (мутирует инвентарь/навыки). | ⬜ |
+| 6. ContractsModal | `_build_contracts_modal` (22 функции!). Самая большая зона. | ⬜ |
+| 7. PartyModal | `_build_party_modal` (13 функций). | ⬜ |
+| 8. EstateModal | `_build_estate_modal` (15 функций). | ⬜ |
+| 9. SettlementModal | `_build_settlement_modal`. | ⬜ |
+| 10. Remaining modals | event, construction, chest, dialogue, origin, citizen_shop, alchemy, stable, shipyard, bard, dog. | ⬜ |
+| 11. CombatController | `_hit_npc/_hit_wildlife/_spawn_slash_effect/_spawn_projectile` → `combat/`. | ⬜ |
+| 12. Spawning/World helpers | `_spawn_npcs/_spawn_wildlife/_create_animal` → `world/`. | ⬜ |
+
+**Метрика:** GameWorld2D.gd 13 157 → 12 559 строк (−598). Каждый вынос модалки экономит 50–350 строк.
+**Риск:** модалки, мутирующие состояние (trade/smithing/contracts/party/estate), требуют колбэков как в InventoryModal. Read-only (skills) — проще.
+
 ## Известные дефекты (из валидации, чинить отдельно)
-- `SpriteGenerator2D.gd:63,214` грузит PNG через `load()` как image → при экспорте билда
-  ассеты не попадут в пакет. Надо импортировать как `Texture2D` и грузить `preload`/`load` ресурса.
-  (22 WARNING, не ломает редактор/рантайм, ломает экспорт.)
+- `SpriteGenerator2D.gd` — **ИСПРАВЛЕНО** (PNG→Texture2D, 22→0 WARNING). `2225d49`
+- Headless-лог при выходе: `ObjectDB instances were leaked` / `1 resources still in use` — штатный шум, не влияет.
+
