@@ -44,9 +44,9 @@
 | 1. UI-хелперы | `ui/UIHelpers.gd` (autoload): `panel_style()`, `style_button()`. Монолит делегирует. | ✅ `19e6890` |
 | 2. InventoryModal | `ui/modals/InventoryModal.gd` (RefCounted-фасад + колбэки эффектов). | ✅ `e1573c7` |
 | 3. SkillsModal | `ui/modals/SkillsModal.gd` (read-only фасад). | ✅ `7f57532` |
-| 4. TradeModal | `_build_trade_modal` (рынок) — мутирует gold/инвентарь, сложнее. | ⬜ |
-| 5. SmithingModal | `_build_smithing_modal` — крафт (мутирует инвентарь/навыки). | ⬜ |
-| 6. ContractsModal | `_build_contracts_modal` (22 функции!). Самая большая зона. | ⬜ |
+| 4. TradeModal | `ui/modals/TradeModal.gd` (фасад; мутации через `local_market`). | ✅ `39a52f4` |
+| 5. SmithingModal | `ui/modals/SmithingModal.gd` (фасад; мутации `player_data`, XP→колбэк). | ✅ `85286e3` |
+| 6. ContractsModal | `ui/modals/ContractsModal.gd` — **фасад готов, НЕ подключён**. Зона рискованная (22 ф-и, глубокая мутация `ContractManager`/квестов). Возврат к HEAD после того, как гигантский патч случайно обрезал `_update_quest_tracker`. План: аккуратный повторной подключение отдельным малым патчем (не трогать `_update_quest_tracker`). | ⬜ фасад готов, ⬜ wiring |
 | 7. PartyModal | `_build_party_modal` (13 функций). | ⬜ |
 | 8. EstateModal | `_build_estate_modal` (15 функций). | ⬜ |
 | 9. SettlementModal | `_build_settlement_modal`. | ⬜ |
@@ -54,8 +54,9 @@
 | 11. CombatController | `_hit_npc/_hit_wildlife/_spawn_slash_effect/_spawn_projectile` → `combat/`. | ⬜ |
 | 12. Spawning/World helpers | `_spawn_npcs/_spawn_wildlife/_create_animal` → `world/`. | ⬜ |
 
-**Метрика:** GameWorld2D.gd 13 157 → 12 559 строк (−598). Каждый вынос модалки экономит 50–350 строк.
-**Риск:** модалки, мутирующие состояние (trade/smithing/contracts/party/estate), требуют колбэков как в InventoryModal. Read-only (skills) — проще.
+**Метрика:** GameWorld2D.gd 13 157 → 12 179 строк (−978). 4 модалки + UIHelpers + фикс PNG.
+**Паттерн выноса:** `RefCounted`-фасад `ui/modals/XxxModal.gd` с `.build(canvas, ...)`, `.open()/.close()/.is_open()/.refresh()`. Мутации состояния → через колбэки (монолит = единственный источник правды, GAME.md §8). UI-хелперы — `UIHelpers.panel_style/style_button` (autoload, preload внутри фасадов).
+**Риск:** модалки, мутирующие состояние, требуют колбэков как в Trade/Smithing. Read-only (skills) — проще. Монолит держит делегаторы `func _build_xxx_modal(_canvas): pass` + `func _toggle_xxx()/refresh()`.
 
 ## Известные дефекты (из валидации, чинить отдельно)
 - `SpriteGenerator2D.gd` — **ИСПРАВЛЕНО** (PNG→Texture2D, 22→0 WARNING). `2225d49`
