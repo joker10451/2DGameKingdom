@@ -97,6 +97,7 @@ const SmithingModalScript = preload("res://src/ui/modals/SmithingModal.gd")
 const ContractsModalScript = preload("res://src/ui/modals/ContractsModal.gd")
 const PartyModalScript = preload("res://src/ui/modals/PartyModal.gd")
 const EstateModalScript = preload("res://src/ui/modals/EstateModal.gd")
+const ConstructionModalScript = preload("res://src/ui/modals/ConstructionModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -370,6 +371,9 @@ var contracts_modal: RefCounted
 var party_modal: RefCounted
 
 var estate_modal: RefCounted
+
+var construction_modal: RefCounted
+
 
 
 
@@ -4674,10 +4678,20 @@ func _build_ui_hud() -> void:
 	_build_construction_modal(canvas)
 
 
+	# Строительство вынесено в ui/modals/ConstructionModal.gd (фасад, self-contained).
+	construction_modal = ConstructionModalScript.new()
+	construction_modal.build(
+		canvas,
+		build_catalog,
+		_log,
+		_on_start_construction_placement,
+		_close_all_modals
+	)
+
 	_build_chest_modal(canvas)
 
-	_build_settlement_modal(canvas)
 
+	_build_settlement_modal(canvas)
 	_build_origin_modal(canvas)
 
 	_build_citizen_shop_modal(canvas)
@@ -5223,139 +5237,31 @@ func _on_event_option_chosen(ev: Dictionary, opt: Dictionary) -> void:
 
 				player_stamina = minf(player_stamina, player_max_stamina - player_fatigue)
 
-				_log("[color=orange]💤 Накопилась усталость (+%d). Макс. выносливость снижена до %.0f/100! Поспите на кровати [E] для отдыха.[/color]" % [int(f_add), player_max_stamina - player_fatigue])
-
-			else:
-
-				player_stamina = clampf(player_stamina + opt["stamina_change"], 0.0, player_max_stamina - player_fatigue)
-
-	_log("[color=yellow][СОБЫТИЕ: %s][/color] %s" % [ev["title"], opt["outcome"]])
-
-	_close_all_modals()
-
-
-
-# --- СТРОИТЕЛЬСТВО ПОСЕЛЕНИЯ И ЧЕРТЕЖИ [B] ---
-
-func _build_construction_modal(canvas: CanvasLayer) -> void:
-
-	build_panel = PanelContainer.new()
-
-	build_panel.position = Vector2(300, 100)
-
-	build_panel.custom_minimum_size = Vector2(680, 460)
-
-	build_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
-
-	build_panel.visible = false
-
-	canvas.add_child(build_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	build_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "🔨 ЧЕРТЕЖИ СТРОИТЕЛЬСТВА И ПОСЕЛЕНИЯ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	build_blueprints_list = ItemList.new()
-
-	build_blueprints_list.custom_minimum_size = Vector2(640, 240)
-
-	build_blueprints_list.item_selected.connect(_on_build_item_selected)
-
-	for i in build_catalog.size():
-
-		var b = build_catalog[i]
-
-		build_blueprints_list.add_item(b["name"])
-
-	vbox.add_child(build_blueprints_list)
-
-	
-
-	build_cost_label = Label.new()
-
-	build_cost_label.text = "Выберите чертеж для постройки..."
-
-	build_cost_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-
-	vbox.add_child(build_cost_label)
-
-	
-
-	var select_btn = Button.new()
-
-	select_btn.text = "📐 Начать размещение (Клик по клетке)"
-
-	_style_button(select_btn)
-
-	select_btn.pressed.connect(func():
-
-		build_panel.visible = false
-
-		is_ui_open = false
-
-		_log("[color=yellow]Режим размещения: Кликните ЛКМ по свободной клетке земли для постройки![/color]")
-
-	)
-
-	vbox.add_child(select_btn)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_construction_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: stroitelstvo vyneseno v ui/modals/ConstructionModal.gd.
+	# Sozdanie v _build_ui_hud() cherez construction_modal.build().
+	pass
 
 
 func _refresh_build_panel() -> void:
-
-	if build_blueprints_list and build_catalog.size() > 0:
-
-		build_blueprints_list.select(selected_build_idx)
-
-		_on_build_item_selected(selected_build_idx)
+	# Vybor teper vnutri ConstructionModal; monolit hranit selected_build_idx.
+	pass
 
 
+func _on_build_item_selected(_idx: int) -> void:
+	# Vybor v spiske teper vnutri ConstructionModal (item_selected signal).
+	pass
 
-func _on_build_item_selected(idx: int) -> void:
 
-	selected_build_idx = idx
+func _on_start_construction_placement() -> void:
+	if construction_modal == null:
+		return
+	selected_build_idx = construction_modal.get_selected_idx()
+	construction_modal.close()
+	is_ui_open = false
+	_log("[color=yellow]Режим размещения: Кликните ЛКМ по свободной клетке земли для постройки![/color]")
 
-	var b = build_catalog[idx]
 
-	var cost_str := ""
-
-	for req_id in b["cost"].keys():
-
-		var it = ItemDatabase.get_item(req_id)
-
-		cost_str += "%s %s x%d " % [it.get("icon", ""), it.get("name", req_id), b["cost"][req_id]]
-
-	build_cost_label.text = "Требуется: %s\n%s" % [cost_str, b["desc"]]
 
 
 
@@ -5625,6 +5531,7 @@ func _close_all_modals() -> void:
 	if contracts_modal: contracts_modal.close()
 	if party_modal: party_modal.close()
 	if estate_modal: estate_modal.close()
+	if construction_modal: construction_modal.close()
 
 	if party_panel: party_panel.visible = false
 
