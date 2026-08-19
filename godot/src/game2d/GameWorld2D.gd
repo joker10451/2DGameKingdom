@@ -90,6 +90,7 @@ const TradeCaravanSystemScript = preload("res://src/world/TradeCaravanSystem.gd"
 const RegionalDiplomacySystemScript = preload("res://src/world/RegionalDiplomacySystem.gd")
 const FactionWarfareSystemScript = preload("res://src/world/FactionWarfareSystem.gd")
 const EnhancedArtGeneratorScript = preload("res://src/world/EnhancedArtGenerator.gd")
+const InventoryModalScript = preload("res://src/ui/modals/InventoryModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -349,6 +350,8 @@ var inv_items_list: ItemList
 var inv_details_label: RichTextLabel
 
 var selected_inv_item: String = ""
+
+var inventory_modal: RefCounted
 
 
 
@@ -4583,7 +4586,19 @@ func _build_ui_hud() -> void:
 
 	_build_dialogue_modal(canvas)
 
-	_build_inventory_modal(canvas)
+	# Инвентарь вынесен в ui/modals/InventoryModal.gd (RefCounted-фасад).
+	var _gm = _get_game_manager()
+	var _pd = _gm.player_data if _gm else null
+	inventory_modal = InventoryModalScript.new()
+	inventory_modal.build(
+		canvas,
+		_pd,
+		ItemDatabase,
+		_apply_inventory_use_effects,  # on_use_effects(item_id)
+		_on_inventory_equip_effects,   # on_equip_effects(item_id, item)
+		_close_all_modals             # on_close
+	)
+	inventory_modal.item_selected.connect(_on_inv_item_selected)
 
 	_build_skills_modal(canvas)
 
@@ -4838,311 +4853,90 @@ func _add_dialogue_btn(txt: String, cb: Callable) -> void:
 
 # --- ИНВЕНТАРЬ ---
 
-func _build_inventory_modal(canvas: CanvasLayer) -> void:
-
-	inventory_panel = PanelContainer.new()
-
-	inventory_panel.position = Vector2(280, 90)
-
-	inventory_panel.custom_minimum_size = Vector2(720, 460)
-
-	inventory_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
-
-	inventory_panel.visible = false
-
-	canvas.add_child(inventory_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	inventory_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "🎒 СНАРЯЖЕНИЕ И ИНВЕНТАРЬ (SOULASH 2)"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	var hbox = HBoxContainer.new()
-
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	hbox.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(hbox)
-
-	
-
-	inv_items_list = ItemList.new()
-
-	inv_items_list.custom_minimum_size = Vector2(340, 280)
-
-	inv_items_list.item_selected.connect(_on_inv_item_selected)
-
-	hbox.add_child(inv_items_list)
-
-	
-
-	var right_vbox = VBoxContainer.new()
-
-	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(right_vbox)
-
-	
-
-	inv_details_label = RichTextLabel.new()
-
-	inv_details_label.bbcode_enabled = true
-
-	inv_details_label.custom_minimum_size = Vector2(320, 180)
-
-	inv_details_label.fit_content = true
-
-	right_vbox.add_child(inv_details_label)
-
-	
-
-	var btn_hbox = HBoxContainer.new()
-
-	btn_hbox.add_theme_constant_override("separation", 10)
-
-	right_vbox.add_child(btn_hbox)
-
-	
-
-	var equip_btn = Button.new()
-
-	equip_btn.text = "⚔️ Надеть"
-
-	_style_button(equip_btn)
-
-	equip_btn.pressed.connect(_on_equip_pressed)
-
-	btn_hbox.add_child(equip_btn)
-
-	
-
-	var use_btn = Button.new()
-
-	use_btn.text = "🍞 Съесть/Выпить"
-
-	_style_button(use_btn)
-
-	use_btn.pressed.connect(_on_use_pressed)
-
-	btn_hbox.add_child(use_btn)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_inventory_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI инвентаря вынесен в ui/modals/InventoryModal.gd.
+	# Создание/построение происходит в _build_ui_hud() через inventory_modal.build().
+	pass
 
 
 func _toggle_inventory() -> void:
-
-	if inventory_panel.visible:
-
+	if inventory_modal == null:
+		return
+	if inventory_modal.is_open():
 		_close_all_modals()
-
 	else:
-
 		_close_all_modals()
-
 		is_ui_open = true
-
-		inventory_panel.visible = true
-
-		_refresh_inventory_list()
-
+		inventory_modal.open()
 
 
 func _refresh_inventory_list() -> void:
+	if inventory_modal:
+		inventory_modal.refresh()
 
-	inv_items_list.clear()
 
+func _on_inv_item_selected(item_id: String) -> void:
+	# InventoryModal.item_selected передаёт item_id напрямую.
+	selected_inv_item = item_id
+
+
+func _on_inventory_equip_effects(item_id: String, it: Dictionary) -> void:
+	# Экипировка уже записана в player_data внутри фасада; здесь только лог.
 	var gm = _get_game_manager()
-
 	var p = gm.player_data if gm else null
-
-	if not p: return
-
-	
-
-	for item_id in p.inventory.keys():
-
-		var count = p.inventory[item_id]
-
-		var item = ItemDatabase.get_item(item_id)
-
-		var is_eq = (p.equipped_weapon == item_id or p.equipped_shield == item_id or p.get("equipped_armor") == item_id)
-
-		var equip_tag = " [ЭКИП]" if is_eq else ""
-
-		inv_items_list.add_item("%s %s x%d%s" % [item.get("icon", "📦"), item.get("name", item_id), count, equip_tag])
-
-		inv_items_list.set_item_metadata(inv_items_list.get_item_count() - 1, item_id)
-
-
-
-func _on_inv_item_selected(idx: int) -> void:
-
-	selected_inv_item = inv_items_list.get_item_metadata(idx)
-
-	var item = ItemDatabase.get_item(selected_inv_item)
-
-	inv_details_label.text = """[b]%s %s[/b]
-
-%s
-
-
-
-[color=gold]Цена продажи:[/color] %d золотых
-
-[color=lightblue]Категория:[/color] %s""" % [item.get("icon", ""), item.get("name", ""), item.get("desc", ""), item.get("value", 1), item.get("category", "Разное")]
-
-
-
-func _on_equip_pressed() -> void:
-
-	if selected_inv_item == "": return
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	if not p: return
-
-	var it = ItemDatabase.get_item(selected_inv_item)
-
+	if not p:
+		return
 	if it.get("category") == "weapon":
-
-		p.equipped_weapon = selected_inv_item
-
 		_log("[color=green]⚔️ Вы экипировали оружие: %s[/color]" % it.get("name", ""))
-
 	elif it.get("category") == "shield":
-
-		p.equipped_shield = selected_inv_item
-
 		_log("[color=green]🛡️ Вы экипировали щит: %s[/color]" % it.get("name", ""))
-
 	elif it.get("category") == "armor":
-
-		p.set("equipped_armor", selected_inv_item)
-
 		_log("[color=green]🥋 Вы экипировали доспех: %s[/color]" % it.get("name", ""))
 
-	_refresh_inventory_list()
 
-
-
-func _on_use_pressed() -> void:
-
-	if selected_inv_item == "": return
-
+func _apply_inventory_use_effects(item_id: String) -> void:
+	# Эффекты использования предметов (состояние игрока — здесь, единственный источник правды).
 	var gm = _get_game_manager()
-
 	var p = gm.player_data if gm else null
-
-	if not p: return
-
-	var it = ItemDatabase.get_item(selected_inv_item)
-
+	if not p:
+		return
+	var it = ItemDatabase.get_item(item_id)
 	if it.get("category") == "food" or it.get("category") == "potion":
-
-		p.remove_item(selected_inv_item, 1)
-
+		p.remove_item(item_id, 1)
 		var heal = float(it.get("hp_restore", it.get("heal_hp", 20.0)))
-
 		var stam = float(it.get("restore_stamina", it.get("heal_stamina", 30.0)))
-
 		player_hp = minf(player_max_hp, player_hp + heal)
-
 		player_stamina = minf(player_max_stamina, player_stamina + stam)
-
 		player_hunger = maxf(0.0, player_hunger - (heal * 0.9))
 
-		
-
-		if selected_inv_item == "potion_stoneskin":
-
+		if item_id == "potion_stoneskin":
 			stoneskin_timer = 300.0
-
 			_log("[color=cyan]🛡️ Вы выпили Зелье Каменной Кожи! Ваша защита увеличена на +10 DEF на 5 минут![/color]")
-
 			_spawn_spark_particles(player_pos, Color.CYAN)
-
 			_spawn_floating_text(player_pos, "🛡️ КАМЕННАЯ КОЖА +10 DEF", Color.CYAN, 18)
-
-		elif selected_inv_item == "potion_swiftness":
-
+		elif item_id == "potion_swiftness":
 			swiftness_timer = 300.0
-
 			_log("[color=yellow]⚡ Вы выпили Эликсир Скорости! Скорость бега увеличена на +35% на 5 минут![/color]")
-
 			_spawn_spark_particles(player_pos, Color.YELLOW)
-
 			_spawn_floating_text(player_pos, "⚡ СКОРОСТЬ +35%", Color.YELLOW, 18)
-
-		elif selected_inv_item == "poison_vial":
-
+		elif item_id == "poison_vial":
 			poison_hits_left = 10
-
 			_log("[color=purple]☠️ Вы смазали оружие смертоносным ядом! Следующие 10 ударов нанесут +15 токсичного урона![/color]")
-
 			_spawn_spark_particles(player_pos, Color.PURPLE)
-
 			_spawn_floating_text(player_pos, "☠️ ЯД НА КЛИНКЕ +15", Color.PURPLE, 18)
-
-		elif selected_inv_item == "mead":
-
+		elif item_id == "mead":
 			player_fatigue = maxf(0.0, player_fatigue - 50.0)
-
 			_log("[color=gold]🍺 Вы испили хмельной медовухи! Усталость снижена на 50%, силы восстановлены![/color]")
-
 			_spawn_floating_text(player_pos, "🍺 МЕДОВУХА (-50% Усталости)", Color.GOLD, 16)
-
-		elif selected_inv_item == "fish_soup":
-
+		elif item_id == "fish_soup":
 			player_hunger = 0.0
-
 			_log("[color=green]🍲 Вы отведали Царской Ухи! Голод полностью утолен, силы на максимуме![/color]")
-
 			_spawn_floating_text(player_pos, "🍲 ЦАРСКАЯ УХА (100% Сытости)", Color.GREEN, 18)
-
 		else:
-
 			_log("[color=green]Вы употребили %s (+%.0f HP, +%.0f Выносливости, утоление голода)![/color]" % [it.get("name", ""), heal, stam])
-
 			_spawn_floating_text(player_pos, "+%.0f HP ❤️" % heal, Color(0.3, 1.0, 0.3), 16)
 
-			
 
-		_refresh_inventory_list()
-
-
-
-# --- РЫНОК ---
 
 func _build_trade_modal(canvas: CanvasLayer) -> void:
 
