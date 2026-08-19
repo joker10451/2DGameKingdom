@@ -98,6 +98,7 @@ const ContractsModalScript = preload("res://src/ui/modals/ContractsModal.gd")
 const PartyModalScript = preload("res://src/ui/modals/PartyModal.gd")
 const EstateModalScript = preload("res://src/ui/modals/EstateModal.gd")
 const ConstructionModalScript = preload("res://src/ui/modals/ConstructionModal.gd")
+const ChestModalScript = preload("res://src/ui/modals/ChestModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -373,6 +374,9 @@ var party_modal: RefCounted
 var estate_modal: RefCounted
 
 var construction_modal: RefCounted
+
+var chest_modal: RefCounted
+
 
 
 
@@ -4688,8 +4692,14 @@ func _build_ui_hud() -> void:
 		_close_all_modals
 	)
 
-	_build_chest_modal(canvas)
-
+	# Сундук вынесен в ui/modals/ChestModal.gd (фасад; мутации world_map+p через колбэки).
+	chest_modal = ChestModalScript.new()
+	chest_modal.build(
+		canvas,
+		_on_take_item_from_chest,  # on_take(item_id)
+		_on_store_item_to_chest,   # on_store(item_id)
+		_close_all_modals          # on_close
+	)
 
 	_build_settlement_modal(canvas)
 	_build_origin_modal(canvas)
@@ -5261,256 +5271,64 @@ func _on_start_construction_placement() -> void:
 	is_ui_open = false
 	_log("[color=yellow]Режим размещения: Кликните ЛКМ по свободной клетке земли для постройки![/color]")
 
-
-
-
-
-# --- ХРАНИЛИЩЕ И СУНДУКИ [E] ---
-
-func _build_chest_modal(canvas: CanvasLayer) -> void:
-
-	chest_panel = PanelContainer.new()
-
-	chest_panel.position = Vector2(250, 90)
-
-	chest_panel.custom_minimum_size = Vector2(780, 480)
-
-	chest_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
-
-	chest_panel.visible = false
-
-	canvas.add_child(chest_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	chest_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "📦 ДУБОВЫЙ СУНДУК (ХРАНИЛИЩЕ)"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	var hbox = HBoxContainer.new()
-
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	hbox.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(hbox)
-
-	
-
-	# Левая колонка: В сундуке
-
-	var c_vbox = VBoxContainer.new()
-
-	c_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(c_vbox)
-
-	var c_lbl = Label.new()
-
-	c_lbl.text = "📦 В сундуке:"
-
-	c_vbox.add_child(c_lbl)
-
-	chest_items_list = ItemList.new()
-
-	chest_items_list.custom_minimum_size = Vector2(360, 250)
-
-	c_vbox.add_child(chest_items_list)
-
-	var take_btn = Button.new()
-
-	take_btn.text = "⬇️ Забрать в инвентарь (1 шт.)"
-
-	_style_button(take_btn)
-
-	take_btn.pressed.connect(_on_take_item_from_chest)
-
-	c_vbox.add_child(take_btn)
-
-	
-
-	# Правая колонка: В инвентаре игрока
-
-	var p_vbox = VBoxContainer.new()
-
-	p_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(p_vbox)
-
-	var p_lbl = Label.new()
-
-	p_lbl.text = "🎒 В вашем инвентаре:"
-
-	p_vbox.add_child(p_lbl)
-
-	chest_player_list = ItemList.new()
-
-	chest_player_list.custom_minimum_size = Vector2(360, 250)
-
-	p_vbox.add_child(chest_player_list)
-
-	var store_btn = Button.new()
-
-	store_btn.text = "⬆️ Положить в сундук (1 шт.)"
-
-	_style_button(store_btn)
-
-	store_btn.pressed.connect(_on_store_item_to_chest)
-
-	p_vbox.add_child(store_btn)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_chest_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: sunduk vynesen v ui/modals/ChestModal.gd.
+	# Sozdanie v _build_ui_hud() cherez chest_modal.build().
+	pass
 
 
 func _open_chest_menu(tile_pos: Vector2i) -> void:
-
+	if chest_modal == null:
+		return
 	active_chest_tile = tile_pos
-
 	_close_all_modals()
-
 	is_ui_open = true
-
-	chest_panel.visible = true
-
+	chest_modal.open(tile_pos)
 	_refresh_chest_window()
 
 
-
 func _refresh_chest_window() -> void:
-
-	chest_items_list.clear()
-
-	chest_player_list.clear()
-
-	
-
-	if not world_map.interactive_nodes.has(active_chest_tile):
-
+	if chest_modal == null:
 		return
-
-	
-
+	if not world_map.interactive_nodes.has(active_chest_tile):
+		return
 	var chest_data = world_map.interactive_nodes[active_chest_tile]
-
 	var c_inv: Dictionary = chest_data.get("inventory", {})
-
-	
-
-	for item_id in c_inv.keys():
-
-		var count = c_inv[item_id]
-
-		var it = ItemDatabase.get_item(item_id)
-
-		chest_items_list.add_item("%s %s x%d" % [it.get("icon", "📦"), it.get("name", item_id), count])
-
-		chest_items_list.set_item_metadata(chest_items_list.get_item_count() - 1, item_id)
-
-	
-
 	var gm = _get_game_manager()
-
 	var p = gm.player_data if gm else null
-
+	chest_modal.set_chest_items(c_inv)
 	if p:
-
-		for item_id in p.inventory.keys():
-
-			var count = p.inventory[item_id]
-
-			var it = ItemDatabase.get_item(item_id)
-
-			chest_player_list.add_item("%s %s x%d" % [it.get("icon", "📦"), it.get("name", item_id), count])
-
-			chest_player_list.set_item_metadata(chest_player_list.get_item_count() - 1, item_id)
+		chest_modal.set_player_items(p.inventory)
 
 
-
-func _on_take_item_from_chest() -> void:
-
-	var sel = chest_items_list.get_selected_items()
-
-	if sel.size() == 0: return
-
-	var item_id = chest_items_list.get_item_metadata(sel[0])
-
-	
-
+func _on_take_item_from_chest(_item_id_override: String = "") -> void:
+	var item_id = _item_id_override if _item_id_override != "" else (chest_modal.get_selected_chest_id() if chest_modal else "")
+	if item_id == "":
+		return
 	if world_map.interactive_nodes.has(active_chest_tile):
-
 		var c_inv = world_map.interactive_nodes[active_chest_tile]["inventory"]
-
 		if c_inv.has(item_id) and c_inv[item_id] > 0:
-
 			c_inv[item_id] -= 1
-
 			if c_inv[item_id] <= 0:
-
 				c_inv.erase(item_id)
-
 			var gm = _get_game_manager()
-
 			var p = gm.player_data if gm else null
-
 			if p: p.add_item(item_id, 1)
-
 			_refresh_chest_window()
 
 
-
-func _on_store_item_to_chest() -> void:
-
-	var sel = chest_player_list.get_selected_items()
-
-	if sel.size() == 0: return
-
-	var item_id = chest_player_list.get_item_metadata(sel[0])
-
-	
-
+func _on_store_item_to_chest(_item_id_override: String = "") -> void:
+	var item_id = _item_id_override if _item_id_override != "" else (chest_modal.get_selected_player_id() if chest_modal else "")
+	if item_id == "":
+		return
 	var gm = _get_game_manager()
-
 	var p = gm.player_data if gm else null
-
 	if p and p.get_item_count(item_id) >= 1:
-
 		p.remove_item(item_id, 1)
-
 		if world_map.interactive_nodes.has(active_chest_tile):
-
 			var c_inv = world_map.interactive_nodes[active_chest_tile]["inventory"]
-
 			c_inv[item_id] = c_inv.get(item_id, 0) + 1
-
 		_refresh_chest_window()
-
 
 
 func _close_all_modals() -> void:
@@ -5532,6 +5350,7 @@ func _close_all_modals() -> void:
 	if party_modal: party_modal.close()
 	if estate_modal: estate_modal.close()
 	if construction_modal: construction_modal.close()
+	if chest_modal: chest_modal.close()
 
 	if party_panel: party_panel.visible = false
 
