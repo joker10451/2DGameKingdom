@@ -1,6 +1,8 @@
 class_name SkillsModal
 extends RefCounted
 
+const UIHelpersScript = preload("res://src/ui/UIHelpers.gd")
+
 ## SkillsModal: фасад окна "Книга навыков" (вынесен из GameWorld2D.gd).
 ## Чистый read-only UI: строит профиль героя + список навыков с опытом.
 ## Не мутирует состояние — только читает player_data и SkillSystem.
@@ -25,7 +27,7 @@ func build(canvas: CanvasLayer, player_data, skill_sys, on_close: Callable) -> v
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(180, 55)
 	_panel.custom_minimum_size = Vector2(920, 550)
-	_panel.add_theme_stylebox_override("panel", UIHelpers.panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
+	_panel.add_theme_stylebox_override("panel", UIHelpersScript.panel_style(Color(0.11, 0.12, 0.16, 0.97), Color(0.85, 0.70, 0.32), 2, 8))
 	_panel.visible = false
 	canvas.add_child(_panel)
 
@@ -46,7 +48,7 @@ func build(canvas: CanvasLayer, player_data, skill_sys, on_close: Callable) -> v
 
 	var left_p = PanelContainer.new()
 	left_p.custom_minimum_size = Vector2(300, 430)
-	left_p.add_theme_stylebox_override("panel", UIHelpers.panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
+	left_p.add_theme_stylebox_override("panel", UIHelpersScript.panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
 	hbox.add_child(left_p)
 
 	_char_profile = RichTextLabel.new()
@@ -70,7 +72,7 @@ func build(canvas: CanvasLayer, player_data, skill_sys, on_close: Callable) -> v
 
 	var close_btn = Button.new()
 	close_btn.text = "Закрыть [Esc] / [K]"
-	UIHelpers.style_button(close_btn)
+	UIHelpersScript.style_button(close_btn)
 	close_btn.pressed.connect(_on_close_pressed)
 	vbox.add_child(close_btn)
 
@@ -148,7 +150,7 @@ func refresh() -> void:
 
 		var card = PanelContainer.new()
 		card.custom_minimum_size = Vector2(560, 68)
-		card.add_theme_stylebox_override("panel", UIHelpers.panel_style(Color(0.12, 0.14, 0.18, 0.9), Color(0.5, 0.42, 0.22), 1, 4))
+		card.add_theme_stylebox_override("panel", UIHelpersScript.panel_style(Color(0.12, 0.14, 0.18, 0.9), Color(0.5, 0.42, 0.22), 1, 4))
 		_skills_vbox.add_child(card)
 
 		var c_vbox = VBoxContainer.new()
@@ -178,8 +180,8 @@ func refresh() -> void:
 		bar.custom_minimum_size = Vector2(540, 16)
 		bar.value = (xp / req_xp) * 100.0
 		bar.show_percentage = false
-		var b_bg = UIHelpers.panel_style(Color(0.06, 0.07, 0.09, 0.9), Color(0.2, 0.18, 0.12), 1, 2)
-		var b_fill = UIHelpers.panel_style(Color(0.85, 0.65, 0.18), Color(0.98, 0.82, 0.35), 1, 2)
+		var b_bg = UIHelpersScript.panel_style(Color(0.06, 0.07, 0.09, 0.9), Color(0.2, 0.18, 0.12), 1, 2)
+		var b_fill = UIHelpersScript.panel_style(Color(0.85, 0.65, 0.18), Color(0.98, 0.82, 0.35), 1, 2)
 		bar.add_theme_stylebox_override("background", b_bg)
 		bar.add_theme_stylebox_override("fill", b_fill)
 

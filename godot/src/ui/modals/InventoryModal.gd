@@ -1,6 +1,8 @@
 class_name InventoryModal
 extends RefCounted
 
+const UIHelpersScript = preload("res://src/ui/UIHelpers.gd")
+
 ## InventoryModal: фасад модального окна инвентаря (вынесен из GameWorld2D.gd).
 ## Строит UI в переданном CanvasLayer и делегирует эффекты использования/
 ## экипировки во внешние колбэки, чтобы состояние игрока оставалось
@@ -34,7 +36,7 @@ func build(canvas: CanvasLayer, player_data, item_db, on_use_effects: Callable, 
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(230, 80)
 	_panel.custom_minimum_size = Vector2(560, 460)
-	_panel.add_theme_stylebox_override("panel", UIHelpers.panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
+	_panel.add_theme_stylebox_override("panel", UIHelpersScript.panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
 	_panel.visible = false
 	canvas.add_child(_panel)
 
@@ -63,19 +65,19 @@ func build(canvas: CanvasLayer, player_data, item_db, on_use_effects: Callable, 
 
 	var equip_btn = Button.new()
 	equip_btn.text = "⚔️ Надеть"
-	UIHelpers.style_button(equip_btn)
+	UIHelpersScript.style_button(equip_btn)
 	equip_btn.pressed.connect(_on_equip_pressed)
 	btn_hbox.add_child(equip_btn)
 
 	var use_btn = Button.new()
 	use_btn.text = "🍞 Съесть/Выпить"
-	UIHelpers.style_button(use_btn)
+	UIHelpersScript.style_button(use_btn)
 	use_btn.pressed.connect(_on_use_pressed)
 	btn_hbox.add_child(use_btn)
 
 	var close_btn = Button.new()
 	close_btn.text = "Закрыть [Esc]"
-	UIHelpers.style_button(close_btn)
+	UIHelpersScript.style_button(close_btn)
 	close_btn.pressed.connect(_on_close_pressed)
 	vbox.add_child(close_btn)
 
