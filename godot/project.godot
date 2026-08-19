@@ -25,6 +25,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 EventBus="*res://src/core/EventBus.gd"
 TimeManager="*res://src/core/TimeManager.gd"
 GameManager="*res://src/core/GameManager.gd"
+UIHelpers="*res://src/ui/UIHelpers.gd"
 
 [display]
 
