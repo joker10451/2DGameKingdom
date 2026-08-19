@@ -1,0 +1,182 @@
+[gd_scene load_steps=4 format=3 uid="uid://c6v2n9m4k8p1x"]
+
+[ext_resource type="Script" path="res://src/world/VillageManager.gd" id="1_manager"]
+[ext_resource type="Script" path="res://src/character/PlayerController.gd" id="2_player"]
+[ext_resource type="Script" path="res://src/world/Building.gd" id="3_building"]
+
+[node name="VillageWorld" type="Node2D"]
+script = ExtResource("1_manager")
+
+[node name="WorldMapGraphics" type="Node2D" parent="."]
+
+[node name="BuildingsLayer" type="Node2D" parent="."]
+
+[node name="FarmField" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(250, 480)
+script = ExtResource("3_building")
+building_name = "Пшеничное Поле"
+
+[node name="Windmill" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(180, 220)
+script = ExtResource("3_building")
+building_type = 1
+building_name = "Мельница"
+
+[node name="Bakery" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(500, 220)
+script = ExtResource("3_building")
+building_type = 2
+building_name = "Пекарня"
+
+[node name="Tavern" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(720, 280)
+script = ExtResource("3_building")
+building_type = 3
+building_name = "Таверна «Пьяный Кабан»"
+
+[node name="MarketStall" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(520, 450)
+script = ExtResource("3_building")
+building_type = 4
+building_name = "Рыночная Площадь"
+
+[node name="Castle" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(900, 180)
+script = ExtResource("3_building")
+building_type = 7
+building_name = "Замок Барона"
+
+[node name="BanditCamp" type="Area2D" parent="BuildingsLayer"]
+position = Vector2(1050, 560)
+script = ExtResource("3_building")
+building_type = 6
+building_name = "Лесной Лагерь Разбойников"
+
+[node name="CitizensLayer" type="Node2D" parent="."]
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(450, 360)
+script = ExtResource("2_player")
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+zoom = Vector2(1.1, 1.1)
+position_smoothing_enabled = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="HBoxContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 44.0
+grow_horizontal = 2
+theme_override_constants/separation = 12
+
+[node name="TimeLabel" type="Label" parent="HUD/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "🕒 07:00 | 1-й день, Весна, 1042 год"
+
+[node name="PauseBtn" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "⏸ Пауза"
+
+[node name="Speed1x" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "▶ 1x"
+
+[node name="Speed2x" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "⏩ 2x"
+
+[node name="Speed5x" type="Button" parent="HUD/TopBar"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "⚡ 5x"
+
+[node name="BottomBar" type="HBoxContainer" parent="HUD"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -140.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 16
+
+[node name="PlayerCard" type="PanelContainer" parent="HUD/BottomBar"]
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="HUD/BottomBar/PlayerCard"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Info" type="RichTextLabel" parent="HUD/BottomBar/PlayerCard/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Загрузка игрока..."
+
+[node name="HBox" type="HBoxContainer" parent="HUD/BottomBar/PlayerCard/VBox"]
+layout_mode = 2
+
+[node name="RoleOption" type="OptionButton" parent="HUD/BottomBar/PlayerCard/VBox/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ChangeRoleBtn" type="Button" parent="HUD/BottomBar/PlayerCard/VBox/HBox"]
+layout_mode = 2
+text = "Принять титул"
+
+[node name="LogCard" type="PanelContainer" parent="HUD/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LogText" type="RichTextLabel" parent="HUD/BottomBar/LogCard"]
+layout_mode = 2
+bbcode_enabled = true
+scroll_following = true
+text = "Симуляция средневекового живого мира активна. Используйте WASD для передвижения и [E] / клик для диалога."
+
+[node name="DialogueModal" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -260.0
+offset_top = -180.0
+offset_right = 260.0
+offset_bottom = 180.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="HUD/DialogueModal"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="HUD/DialogueModal/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Разговор"
+
+[node name="Text" type="RichTextLabel" parent="HUD/DialogueModal/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Реплика жителя..."
+
+[node name="OptionsContainer" type="VBoxContainer" parent="HUD/DialogueModal/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6

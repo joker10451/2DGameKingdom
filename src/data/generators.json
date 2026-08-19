@@ -1,9 +1,0 @@
-[
-  {
-    "id": "watering_can",
-    "name": "Лейка",
-    "chainId": "carrot",
-    "itemId": "carrot_seed",
-    "cooldownSec": 30
-  }
-]

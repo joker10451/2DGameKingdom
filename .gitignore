@@ -1,5 +1,25 @@
-node_modules/
-dist/
-*.log
-.DS_Store
+# === Godot 4 engine cache ===
+.godot/
+/android/
+# Imported artifacts (kept out of VCS; regenerated on import)
+.godot/
+
+# === MCP agent runtime artifacts ===
+.mcp/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+
+# === Large archives / backups (not source) ===
+*.zip
+*.7z
+*.rar
+
+# === OS / editor ===
 Thumbs.db
+.DS_Store
+desktop.ini
+.idea/
+.vscode/

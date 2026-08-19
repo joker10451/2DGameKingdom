@@ -1,0 +1,152 @@
+[gd_scene load_steps=2 format=3 uid="uid://b7vqlk13q2n5r"]
+
+[ext_resource type="Script" path="res://src/ui/SimulationDashboard.gd" id="1_dashboard"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_dashboard")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TimeLabel" type="Label" parent="VBoxContainer/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "🕒 07:00 | 1-й день, Весна, 1042 год"
+
+[node name="PauseBtn" type="Button" parent="VBoxContainer/TopBar"]
+custom_minimum_size = Vector2(80, 32)
+layout_mode = 2
+text = "⏸ Пауза"
+
+[node name="Speed1x" type="Button" parent="VBoxContainer/TopBar"]
+custom_minimum_size = Vector2(60, 32)
+layout_mode = 2
+text = "▶ 1x"
+
+[node name="Speed2x" type="Button" parent="VBoxContainer/TopBar"]
+custom_minimum_size = Vector2(60, 32)
+layout_mode = 2
+text = "⏩ 2x"
+
+[node name="Speed5x" type="Button" parent="VBoxContainer/TopBar"]
+custom_minimum_size = Vector2(60, 32)
+layout_mode = 2
+text = "⚡ 5x"
+
+[node name="MainSplit" type="HSplitContainer" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LeftPanel" type="VBoxContainer" parent="VBoxContainer/MainSplit"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayerCard" type="PanelContainer" parent="VBoxContainer/MainSplit/LeftPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "👑 Персонаж Игрока"
+
+[node name="PlayerInfo" type="RichTextLabel" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Загрузка данных..."
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+
+[node name="RoleLabel" type="Label" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+text = "Сменить социальный статус:"
+
+[node name="RoleSelect" type="OptionButton" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+
+[node name="ChangeRoleBtn" type="Button" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+text = "Принять титул / роль"
+
+[node name="RoleStatusLabel" type="Label" parent="VBoxContainer/MainSplit/LeftPanel/PlayerCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 2
+
+[node name="CenterPanel" type="VBoxContainer" parent="VBoxContainer/MainSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="VBoxContainer/MainSplit/CenterPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "🏘 Жители поселения (Utility AI & Потребности):"
+
+[node name="NPCScroll" type="ScrollContainer" parent="VBoxContainer/MainSplit/CenterPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="NPCList" type="VBoxContainer" parent="VBoxContainer/MainSplit/CenterPanel/NPCScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="RightPanel" type="VBoxContainer" parent="VBoxContainer/MainSplit"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="MarketCard" type="PanelContainer" parent="VBoxContainer/MainSplit/RightPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="MarketInfo" type="RichTextLabel" parent="VBoxContainer/MainSplit/RightPanel/MarketCard"]
+layout_mode = 2
+bbcode_enabled = true
+text = "Загрузка рынка..."
+
+[node name="LogCard" type="PanelContainer" parent="VBoxContainer/MainSplit/RightPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="VBoxContainer/MainSplit/RightPanel/LogCard"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBoxContainer/MainSplit/RightPanel/LogCard/VBox"]
+layout_mode = 2
+text = "📜 Летопись событий мира"
+
+[node name="LogContent" type="RichTextLabel" parent="VBoxContainer/MainSplit/RightPanel/LogCard/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
