@@ -93,6 +93,7 @@ const EnhancedArtGeneratorScript = preload("res://src/world/EnhancedArtGenerator
 const InventoryModalScript = preload("res://src/ui/modals/InventoryModal.gd")
 const SkillsModalScript = preload("res://src/ui/modals/SkillsModal.gd")
 const TradeModalScript = preload("res://src/ui/modals/TradeModal.gd")
+const SmithingModalScript = preload("res://src/ui/modals/SmithingModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -358,6 +359,8 @@ var inventory_modal: RefCounted
 var skills_modal: RefCounted
 
 var trade_modal: RefCounted
+
+var smithing_modal: RefCounted
 
 
 
@@ -4618,7 +4621,9 @@ func _build_ui_hud() -> void:
 	trade_modal = TradeModalScript.new()
 	trade_modal.build(canvas, _get_game_manager, _log, _close_all_modals)
 
-	_build_smithing_modal(canvas)
+	# Кузница вынесена в ui/modals/SmithingModal.gd (фасад, мутации через player_data).
+	smithing_modal = SmithingModalScript.new()
+	smithing_modal.build(canvas, smith_recipes, _get_game_manager, _log, _award_skill_xp, _close_all_modals)
 
 	_build_event_modal(canvas)
 
@@ -4992,215 +4997,28 @@ var smith_recipes := [
 
 
 
-func _build_smithing_modal(canvas: CanvasLayer) -> void:
-
-	smith_panel = PanelContainer.new()
-
-	smith_panel.position = Vector2(270, 90)
-
-	smith_panel.custom_minimum_size = Vector2(740, 460)
-
-	smith_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.96), Color(0.85, 0.70, 0.32), 2, 8))
-
-	smith_panel.visible = false
-
-	canvas.add_child(smith_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	smith_panel.add_child(vbox)
-
-	
-
-	var title = Label.new()
-
-	title.text = "⚒️ КУЗНИЧНЫЙ ГОРН И НАКОВАЛЬНЯ ВУЛЬФРИКА"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	vbox.add_child(title)
-
-	
-
-	var hbox = HBoxContainer.new()
-
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	hbox.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(hbox)
-
-	
-
-	smith_recipe_list = ItemList.new()
-
-	smith_recipe_list.custom_minimum_size = Vector2(340, 260)
-
-	smith_recipe_list.item_selected.connect(_on_recipe_selected)
-
-	hbox.add_child(smith_recipe_list)
-
-	
-
-	var right_vbox = VBoxContainer.new()
-
-	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	hbox.add_child(right_vbox)
-
-	
-
-	smith_details_label = RichTextLabel.new()
-
-	smith_details_label.bbcode_enabled = true
-
-	smith_details_label.custom_minimum_size = Vector2(330, 180)
-
-	smith_details_label.fit_content = true
-
-	right_vbox.add_child(smith_details_label)
-
-	
-
-	var craft_btn = Button.new()
-
-	craft_btn.text = "🔥 Выковать предмет"
-
-	_style_button(craft_btn)
-
-	craft_btn.pressed.connect(_on_craft_recipe_pressed)
-
-	right_vbox.add_child(craft_btn)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "Закрыть [Esc]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	vbox.add_child(close_btn)
-
+func _build_smithing_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: кузница вынесена в ui/modals/SmithingModal.gd.
+	# Создание происходит в _build_ui_hud() через smithing_modal.build().
+	pass
 
 
 func _open_smithing_menu() -> void:
-
+	if smithing_modal == null:
+		return
 	_close_all_modals()
-
 	is_ui_open = true
-
-	smith_panel.visible = true
-
-	smith_recipe_list.clear()
-
-	for i in smith_recipes.size():
-
-		var r = smith_recipes[i]
-
-		var item = ItemDatabase.get_item(r["result_id"])
-
-		smith_recipe_list.add_item("%s %s" % [item.get("icon", "⚒️"), r["name"]])
-
-	if smith_recipes.size() > 0:
-
-		smith_recipe_list.select(0)
-
-		_on_recipe_selected(0)
+	smithing_modal.open()
 
 
-
-func _on_recipe_selected(idx: int) -> void:
-
-	selected_recipe_idx = idx
-
-	var r = smith_recipes[idx]
-
-	var item = ItemDatabase.get_item(r["result_id"])
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	
-
-	var req_str = ""
-
-	for req_id in r["req"].keys():
-
-		var req_item = ItemDatabase.get_item(req_id)
-
-		var req_amt = r["req"][req_id]
-
-		var have_amt = p.get_item_count(req_id) if p else 0
-
-		var col = "green" if have_amt >= req_amt else "red"
-
-		req_str += "• %s %s: [color=%s]%d / %d[/color]\n" % [req_item.get("icon", ""), req_item.get("name", req_id), col, have_amt, req_amt]
-
-	
-
-	smith_details_label.text = """[b]%s %s[/b]
-
-%s
-
-
-
-[b]Необходимые ресурсы:[/b]
-
-%s""" % [item.get("icon", ""), r["name"], r["desc"], req_str]
-
+func _on_recipe_selected(_idx: int) -> void:
+	# Выбор рецепта теперь внутри SmithingModal (item_selected сигнал).
+	pass
 
 
 func _on_craft_recipe_pressed() -> void:
-
-	if selected_recipe_idx < 0: return
-
-	var r = smith_recipes[selected_recipe_idx]
-
-	var gm = _get_game_manager()
-
-	var p = gm.player_data if gm else null
-
-	if not p: return
-
-	
-
-	for req_id in r["req"].keys():
-
-		if p.get_item_count(req_id) < r["req"][req_id]:
-
-			_log("[color=red]Недостаточно ресурсов для ковки![/color]")
-
-			return
-
-	
-
-	for req_id in r["req"].keys():
-
-		p.remove_item(req_id, r["req"][req_id])
-
-	
-
-	p.add_item(r["result_id"], 1)
-
-	var xp_amt = 35.0 if r["result_id"] == "iron_ingot" else 85.0
-
-	_award_skill_xp("smithing", xp_amt)
-
-	var res_item = ItemDatabase.get_item(r["result_id"])
-
-	_log("[color=gold]🔥 Вы успешно выковали: %s %s![/color]" % [res_item.get("icon", ""), res_item.get("name", "")])
-
-	_on_recipe_selected(selected_recipe_idx)
+	if smithing_modal:
+		smithing_modal._on_craft_pressed()
 
 
 
@@ -5760,6 +5578,7 @@ func _close_all_modals() -> void:
 	if inventory_modal: inventory_modal.close()
 	if skills_modal: skills_modal.close()
 	if trade_modal: trade_modal.close()
+	if smithing_modal: smithing_modal.close()
 
 	if smith_panel: smith_panel.visible = false
 
