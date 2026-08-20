@@ -33,6 +33,7 @@ const CitizenMindSystem = preload("res://src/economy/CitizenMindSystem.gd")
 const CombatDepthSystem = preload("res://src/character/CombatDepthSystem.gd")
 const InteriorSystem = preload("res://src/economy/InteriorSystem.gd")
 const PetCompanionSystem = preload("res://src/character/PetCompanionSystem.gd")
+const LPCAnimationController2D = preload("res://src/game2d/LPCAnimationController2D.gd")
 const AtmosphereSystem = preload("res://src/world/AtmosphereSystem.gd")
 const LivingDialogueSystem = preload("res://src/world/LivingDialogueSystem.gd")
 
@@ -100,6 +101,7 @@ const EstateModalScript = preload("res://src/ui/modals/EstateModal.gd")
 const ConstructionModalScript = preload("res://src/ui/modals/ConstructionModal.gd")
 const ChestModalScript = preload("res://src/ui/modals/ChestModal.gd")
 const OriginModalScript = preload("res://src/ui/modals/OriginModal.gd")
+const CitizenShopModalScript = preload("res://src/ui/modals/CitizenShopModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -170,11 +172,9 @@ var player_torch: PointLight2D
 
 
 # === ИГРОК ===
-
 var player_pos := Vector2(25.0 * TILE_SIZE, 27.5 * TILE_SIZE)
-
 var player_sprite: Sprite2D
-
+var player_anim_controller: LPCAnimationController2D
 var player_hp: float = 100.0
 
 var player_max_hp: float = 100.0
@@ -247,7 +247,7 @@ var env_lights: Array[PointLight2D] = []
 
 var walk_anim_time: float = 0.0
 var footstep_timer: float = 0.0
-var player_direction_row: int = 0
+var player_direction_row: int = 2
 var player_anim_step: float = 0.0
 
 
@@ -379,6 +379,9 @@ var construction_modal: RefCounted
 var chest_modal: RefCounted
 
 var origin_modal: RefCounted
+
+var citizen_shop_modal: RefCounted
+
 
 
 
@@ -876,11 +879,16 @@ func _ready() -> void:
 
 func _spawn_player() -> void:
 	player_sprite = Sprite2D.new()
-	if ResourceLoader.exists("res://assets/sprites/player_walk_cycle.png"):
-		player_sprite.texture = load("res://assets/sprites/player_walk_cycle.png")
+	var _pwc_path := "res://assets/sprites/player_walk_cycle.png"
+	var _pwc_abs := ProjectSettings.globalize_path(_pwc_path)
+	if FileAccess.file_exists(_pwc_abs):
+		var _pwc_img := Image.new()
+		_pwc_img.load(_pwc_abs)
+		var _pwc_tex := ImageTexture.create_from_image(_pwc_img)
+		player_sprite.texture = _pwc_tex
 		player_sprite.hframes = 9
 		player_sprite.vframes = 4
-		player_sprite.frame = 0
+		player_sprite.frame = 18
 		player_sprite.scale = Vector2(0.85, 0.85)
 	else:
 		player_sprite.texture = SpriteGenerator2D.get_character_texture("Player", TILE_SIZE)
@@ -915,87 +923,48 @@ func _spawn_player() -> void:
 
 
 func _create_fire_particles(pos: Vector2) -> CPUParticles2D:
-
 	var p = CPUParticles2D.new()
-
 	p.position = pos
-
-	p.amount = 12
-
-	p.lifetime = 1.2
-
+	p.amount = 8
+	p.lifetime = 0.45
 	p.direction = Vector2(0, -1)
-
-	p.spread = 28.0
-
-	p.gravity = Vector2(0, -30.0)
-
-	p.initial_velocity_min = 20.0
-
-	p.initial_velocity_max = 45.0
-
-	p.scale_amount_min = 2.0
-
-	p.scale_amount_max = 3.5
-
-	p.color = Color(1.0, 0.65, 0.20, 0.85)
-
+	p.spread = 15.0
+	p.gravity = Vector2(0, -8.0)
+	p.initial_velocity_min = 6.0
+	p.initial_velocity_max = 16.0
+	p.scale_amount_min = 1.5
+	p.scale_amount_max = 2.5
+	p.color = Color(1.0, 0.70, 0.25, 0.85)
 	add_child(p)
-
 	return p
 
 
-
 func _spawn_spark_particles(pos: Vector2, col: Color = Color(1.0, 0.85, 0.25)) -> void:
-
 	var p = CPUParticles2D.new()
-
 	p.position = pos
-
 	p.amount = 14
-
 	p.lifetime = 0.4
-
 	p.one_shot = true
-
 	p.explosiveness = 0.9
-
 	p.direction = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
-
 	p.spread = 180.0
-
 	p.gravity = Vector2(0, 80.0)
-
 	p.initial_velocity_min = 50.0
-
 	p.initial_velocity_max = 120.0
-
 	p.scale_amount_min = 2.0
-
 	p.scale_amount_max = 4.0
-
 	p.color = col
-
 	add_child(p)
-
 	get_tree().create_timer(0.5).timeout.connect(p.queue_free)
 
 
-
 func _spawn_environmental_lights() -> void:
-
-	# Костры и факелы в таверне и кузнице
-
+	# Костры и факелы в таверне и кузнице (по центру тайлов)
 	var light_spots = [
-
-		Vector2(24 * TILE_SIZE, 25 * TILE_SIZE), # Таверна
-
-		Vector2(39 * TILE_SIZE, 25 * TILE_SIZE), # Кузница
-
-		Vector2(23 * TILE_SIZE, 39 * TILE_SIZE), # Рынок
-
-		Vector2(40 * TILE_SIZE, 39 * TILE_SIZE)  # Замок
-
+		Vector2((24 + 0.5) * TILE_SIZE, (25 + 0.5) * TILE_SIZE), # Таверна (Очаг)
+		Vector2((39 + 0.5) * TILE_SIZE, (25 + 0.5) * TILE_SIZE), # Кузница (Горн)
+		Vector2((23 + 0.5) * TILE_SIZE, (39 + 0.5) * TILE_SIZE), # Рынок
+		Vector2((40 + 0.5) * TILE_SIZE, (39 + 0.5) * TILE_SIZE)  # Замок
 	]
 
 	
@@ -1016,67 +985,61 @@ func _spawn_environmental_lights() -> void:
 
 
 
-func _spawn_npcs() -> void:
+func _spawn_npcs(loc_type: String = "village") -> void:
+	# Очищаем предыдущие спрайты жителей при смене локации
+	for s in npc_sprites:
+		if is_instance_valid(s):
+			s.queue_free()
+	npc_sprites.clear()
+	npc_positions.clear()
+	npc_data = NPCGenerator.generate_population_for_location(loc_type, 14)
 
 	for i in npc_data.size():
-
 		var npc = npc_data[i]
-
 		var role = npc.get("role", "Крестьянин")
-
 		var spot_id = npc.get("work", "tavern")
 
-		
-
-		# Равномерное и естественное распределение по всей деревне
-
 		var start_tile: Vector2i
-
-		match role:
-
-			"Крестьянин":
-
-				var farm_tiles = [Vector2i(18, 48), Vector2i(22, 50), Vector2i(15, 52), Vector2i(25, 48), Vector2i(20, 53), Vector2i(27, 47)]
-
-				start_tile = farm_tiles[i % farm_tiles.size()]
-
-			"Кузнец":
-
-				var smith_tiles = [Vector2i(38, 25), Vector2i(35, 27)]
-
-				start_tile = smith_tiles[i % smith_tiles.size()]
-
-			"Торговец":
-
-				var market_tiles = [Vector2i(23, 38), Vector2i(25, 37), Vector2i(28, 35), Vector2i(27, 39)]
-
-				start_tile = market_tiles[i % market_tiles.size()]
-
-			"Городской Стражник":
-
-				var guard_tiles = [Vector2i(31, 20), Vector2i(31, 35), Vector2i(31, 48), Vector2i(35, 38), Vector2i(28, 28)]
-
-				start_tile = guard_tiles[i % guard_tiles.size()]
-
-			"Лорд", "Священник":
-
-				start_tile = Vector2i(40, 39)
-
-			"Бандит", "Разбойник", "Разбойник-лучник":
-
-				var bandit_tiles = [Vector2i(8, 12), Vector2i(11, 14), Vector2i(7, 16)]
-
-				start_tile = bandit_tiles[i % bandit_tiles.size()]
-
-				if i % 2 == 1:
-
-					npc["role"] = "Разбойник-лучник"
-
-					npc["is_ranged"] = true
-
+		match loc_type:
+			"city":
+				var city_spots = [Vector2i(31, 12), Vector2i(31, 52), Vector2i(32, 32), Vector2i(20, 38), Vector2i(24, 40), Vector2i(42, 38), Vector2i(30, 16), Vector2i(34, 18), Vector2i(26, 46)]
+				start_tile = city_spots[i % city_spots.size()]
+			"mine":
+				var mine_spots = [Vector2i(22, 44), Vector2i(40, 44), Vector2i(31, 38), Vector2i(31, 20), Vector2i(26, 32), Vector2i(38, 30)]
+				start_tile = mine_spots[i % mine_spots.size()]
+			"swamp":
+				var swamp_spots = [Vector2i(25, 24), Vector2i(34, 28), Vector2i(31, 31), Vector2i(28, 32), Vector2i(36, 30)]
+				start_tile = swamp_spots[i % swamp_spots.size()]
+			"farms":
+				var farm_spots = [Vector2i(28, 18), Vector2i(28, 44), Vector2i(4, 28), Vector2i(18, 18), Vector2i(44, 18), Vector2i(18, 44)]
+				start_tile = farm_spots[i % farm_spots.size()]
+			"fort":
+				var fort_spots = [Vector2i(31, 34), Vector2i(28, 24), Vector2i(22, 36), Vector2i(40, 36), Vector2i(31, 44), Vector2i(32, 44)]
+				start_tile = fort_spots[i % fort_spots.size()]
 			_:
-
-				start_tile = _get_spot_tile(spot_id)
+				match role:
+					"Крестьянин":
+						var farm_tiles = [Vector2i(18, 48), Vector2i(22, 50), Vector2i(15, 52), Vector2i(25, 48), Vector2i(20, 53), Vector2i(27, 47)]
+						start_tile = farm_tiles[i % farm_tiles.size()]
+					"Кузнец":
+						var smith_tiles = [Vector2i(38, 25), Vector2i(35, 27)]
+						start_tile = smith_tiles[i % smith_tiles.size()]
+					"Торговец":
+						var market_tiles = [Vector2i(23, 38), Vector2i(25, 37), Vector2i(28, 35), Vector2i(27, 39)]
+						start_tile = market_tiles[i % market_tiles.size()]
+					"Городской Стражник":
+						var guard_tiles = [Vector2i(31, 20), Vector2i(31, 35), Vector2i(31, 48), Vector2i(35, 38), Vector2i(28, 28)]
+						start_tile = guard_tiles[i % guard_tiles.size()]
+					"Лорд", "Священник":
+						start_tile = Vector2i(40, 39)
+					"Бандит", "Разбойник", "Разбойник-лучник":
+						var bandit_tiles = [Vector2i(8, 12), Vector2i(11, 14), Vector2i(7, 16)]
+						start_tile = bandit_tiles[i % bandit_tiles.size()]
+						if i % 2 == 1:
+							npc["role"] = "Разбойник-лучник"
+							npc["is_ranged"] = true
+					_:
+						start_tile = _get_spot_tile(spot_id)
 
 		
 
@@ -1102,16 +1065,25 @@ func _spawn_npcs() -> void:
 
 		var spr = Sprite2D.new()
 
-		# Загружаем LPC-спрайтшит по роли NPC
 		var npc_tex_path := _get_npc_sprite_path(role, npc.get("gender", "Мужской"))
-		if ResourceLoader.exists(npc_tex_path):
+		var p_abs := ProjectSettings.globalize_path(npc_tex_path)
+		if FileAccess.file_exists(p_abs):
+			var img = Image.load_from_file(p_abs)
+			if img and not img.is_empty():
+				spr.texture = ImageTexture.create_from_image(img)
+				spr.hframes = 9
+				spr.vframes = 4
+				spr.frame = 18
+				spr.scale = Vector2(0.85, 0.85)
+		elif ResourceLoader.exists(npc_tex_path):
 			spr.texture = load(npc_tex_path)
 			spr.hframes = 9
 			spr.vframes = 4
-			spr.frame = 0
+			spr.frame = 18
 			spr.scale = Vector2(0.85, 0.85)
 		else:
 			spr.texture = SpriteGenerator2D.get_character_texture(npc["role"], TILE_SIZE)
+		npc["anim_dir_row"] = 2
 
 		spr.position = world_p
 
@@ -1365,13 +1337,18 @@ func _create_animal(data: Dictionary, tile_pos: Vector2i) -> void:
 
 	var spr = Sprite2D.new()
 	var a_type: String = data.get("type", "wolf")
-	var a_path = "res://assets/sprites/world/%s.png" % a_type
-	if ResourceLoader.exists(a_path):
-		spr.texture = load(a_path)
-	elif ResourceLoader.exists("res://assets/sprites/world/wildlife_%s.png" % a_type):
-		spr.texture = load("res://assets/sprites/world/wildlife_%s.png" % a_type)
+	if a_type in ["skeleton", "skeleton_archer", "boss_malgrim"]:
+		var anim = LPCAnimationController2D.new()
+		var char_pfx = "boss" if a_type == "boss_malgrim" else ("skel_archer" if a_type == "skeleton_archer" else "skel")
+		anim.setup(spr, char_pfx)
+		if a_type == "boss_malgrim":
+			spr.scale = Vector2(1.25, 1.25)
+			spr.modulate = Color(0.9, 0.45, 0.95)
+		else:
+			spr.scale = Vector2(0.9, 0.9)
+		data["anim_ctrl"] = anim
 	else:
-		spr.texture = SpriteGenerator2D.get_character_texture(data["role"], TILE_SIZE)
+		spr.texture = SpriteGenerator2D.get_animal_texture(a_type, TILE_SIZE)
 
 	spr.position = world_p
 	add_child(spr)
@@ -1649,13 +1626,13 @@ func _physics_process(delta: float) -> void:
 
 		
 
-		# Анимация 4-направленной походки из спрайтшита
+		# Анимация 4-направленной походки из спрайтшита (LPC: 0=Up, 1=Left, 2=Down, 3=Right)
 		if abs(input.x) > abs(input.y):
-			if input.x < 0: player_direction_row = 2 # Влево
+			if input.x < 0: player_direction_row = 1 # Влево
 			elif input.x > 0: player_direction_row = 3 # Вправо
 		else:
-			if input.y > 0: player_direction_row = 0 # Вниз
-			elif input.y < 0: player_direction_row = 1 # Вверх
+			if input.y > 0: player_direction_row = 2 # Вниз
+			elif input.y < 0: player_direction_row = 0 # Вверх
 
 		player_anim_step += delta * (14.0 if is_running else 9.5)
 		var cur_step_frame = (int(player_anim_step) % 8) + 1
@@ -1673,8 +1650,22 @@ func _physics_process(delta: float) -> void:
 			else:
 				_play_sfx("sfx_step_grass")
 
+		# Проверка выхода за край карты на глобальный тракт
+		if (player_pos.x <= 16.0 or player_pos.x >= 63.0 * TILE_SIZE - 16.0 or player_pos.y <= 16.0 or player_pos.y >= 63.0 * TILE_SIZE - 16.0):
+			_exit_to_overworld()
+			return
+
 		# Проверка коллизий с картой по тайлам
 		var target_tile = Vector2i(int(new_pos.x / TILE_SIZE), int(new_pos.y / TILE_SIZE))
+		if not world_map.can_walk(target_tile):
+			# Автоматически распахиваем дверь, если игрок идёт прямо в неё
+			if world_map.interactive_nodes.has(target_tile):
+				var d_node = world_map.interactive_nodes[target_tile]
+				if d_node.get("type") == "door" and not d_node.get("is_open", false):
+					world_map.toggle_door(target_tile)
+					_play_sfx("sfx_door_open")
+					_log("[color=yellow]🚪 Дверь открыта[/color]")
+
 		if world_map.can_walk(target_tile):
 			player_pos = new_pos
 			player_sprite.position = player_pos
@@ -1692,8 +1683,13 @@ func _physics_process(delta: float) -> void:
 				player_pos = test_y
 				player_sprite.position = player_pos
 	else:
-		# Плавный возврат в стойку покоя
-		player_anim_step = 0.0
+		if is_blocking:
+			var m_p = get_global_mouse_position()
+			var b_dir = (m_p - player_pos).normalized()
+			if abs(b_dir.x) > abs(b_dir.y):
+				player_direction_row = 3 if b_dir.x > 0 else 1
+			else:
+				player_direction_row = 2 if b_dir.y > 0 else 0
 		if player_sprite.hframes == 9:
 			player_sprite.frame = player_direction_row * 9 # Кадр 0 - стойка покоя
 		player_sprite.rotation_degrees = 0.0
@@ -1726,6 +1722,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if player_anim_controller:
+		player_anim_controller.update(delta)
 
 	camera.position = player_pos
 
@@ -1913,180 +1911,9 @@ func _process(delta: float) -> void:
 
 
 
-	# 2. Поведение NPC и агрессивных разбойников
-
-	for i in npc_data.size():
-
-		var npc = npc_data[i]
-
-		if npc.get("is_dead", false):
-
-			continue
-
-			
-
-		var spr = npc_sprites[i]
-
-		var cur_p = npc_positions[i]
-
-		
-
-		# Бандиты агрятся ТОЛЬКО когда игрок заходит в их лагерь в глухом лесу (< 140px)
-
-		if npc["role"] in ["Бандит", "Разбойник"]:
-
-			var d_p = cur_p.distance_to(player_pos)
-
-			if d_p < 140.0 and d_p > 45.0:
-
-				var dir = (player_pos - cur_p).normalized()
-
-				cur_p += dir * 100.0 * delta
-
-				npc_positions[i] = cur_p
-
-				spr.position = cur_p
-
-				npc["thought"] = "⚔️"
-
-			elif d_p <= 45.0 and attack_cooldown <= 0.0:
-
-				_bandit_attack_player(i)
-
-		else:
-
-			# Обычные жители плавно патрулируют и работают в своем районе
-
-			var idle_t: float = npc.get("idle_timer", 0.0) - delta
-
-			npc["idle_timer"] = idle_t
-
-			
-
-			if idle_t <= 0.0:
-
-				var home: Vector2i = npc.get("home_tile", Vector2i(27, 30))
-
-				var target_tile = home + Vector2i(randi_range(-3, 3), randi_range(-3, 3))
-
-				
-
-				if world_map.can_walk(target_tile):
-
-					npc["target_pos"] = Vector2(target_tile.x * TILE_SIZE + TILE_SIZE/2.0, target_tile.y * TILE_SIZE + TILE_SIZE/2.0)
-
-					npc["idle_timer"] = randf_range(4.0, 9.0) # Стоит 4-9 сек после достижения точки
-
-				else:
-
-					npc["idle_timer"] = randf_range(1.5, 3.5)
-
-			
-
-			var target_p: Vector2 = npc.get("target_pos", cur_p)
-
-			var dist_to_t = cur_p.distance_to(target_p)
-
-			if dist_to_t > 5.0:
-
-				var move_dir = (target_p - cur_p).normalized()
-
-				var spd: float = npc.get("walk_speed", 40.0)
-
-				var next_p = cur_p + move_dir * spd * delta
-
-				var next_tile = Vector2i(int(next_p.x / TILE_SIZE), int(next_p.y / TILE_SIZE))
-
-				if world_map.can_walk(next_tile):
-
-					cur_p = next_p
-
-					npc_positions[i] = cur_p
-
-					spr.position = cur_p
-
-					var w_time: float = npc.get("anim_t", 0.0) + delta * 9.0
-					npc["anim_t"] = w_time
-
-					if spr.hframes == 9:
-						# LPC walk animation: pick row based on movement direction
-						var dir_row := 0
-						if abs(move_dir.x) > abs(move_dir.y):
-							dir_row = 3 if move_dir.x > 0 else 2
-						else:
-							dir_row = 0 if move_dir.y > 0 else 1
-						npc["anim_dir_row"] = dir_row
-						var step_col := (int(w_time) % 8) + 1
-						spr.frame = dir_row * 9 + step_col
-						spr.flip_h = false
-						spr.rotation_degrees = 0.0
-						spr.offset.y = 0.0
-					else:
-						spr.offset.y = sin(w_time) * -2.5
-						spr.rotation_degrees = sin(w_time) * 3.5
-						if move_dir.x != 0:
-							spr.flip_h = (move_dir.x < 0)
-
-				else:
-					npc["target_pos"] = cur_p
-					npc["idle_timer"] = randf_range(2.0, 4.0)
-
-			else:
-				if spr.hframes == 9:
-					var dir_row: int = npc.get("anim_dir_row", 0)
-					spr.frame = dir_row * 9
-					spr.rotation_degrees = 0.0
-					spr.offset.y = 0.0
-				else:
-					spr.rotation_degrees = lerpf(spr.rotation_degrees, 0.0, delta * 8.0)
-					spr.offset.y = sin(Time.get_ticks_msec() * 0.0025 + i * 1.5) * -1.0
-
-		
-
-
-		# Метки имен показываются ТОЛЬКО над тем NPC, на которого направлен фокус
-
-		var plate = spr.get_node_or_null("Nameplate") as Label
-
-		if plate:
-
-			plate.visible = (i == interaction_target)
-
-			if plate.visible:
-
-				var nick = (" «" + npc["nickname"] + "»") if npc.get("nickname", "") != "" else ""
-
-				plate.text = "%s%s" % [npc["name"], nick]
-
-	
-
-	# 3. Мягкое отталкивание живых NPC друг от друга при близком контакте (без рывков)
-
-	for i in npc_positions.size():
-
-		if npc_data[i].get("is_dead", false): continue
-
-		for j in range(i + 1, npc_positions.size()):
-
-			if npc_data[j].get("is_dead", false): continue
-
-			var diff = npc_positions[i] - npc_positions[j]
-
-			var d = diff.length()
-
-			if d < 28.0 and d > 0.01:
-
-				var push = diff.normalized() * (28.0 - d) * 3.5 * delta
-
-				npc_positions[i] += push
-
-				npc_positions[j] -= push
-
-				npc_sprites[i].position = npc_positions[i]
-
-				npc_sprites[j].position = npc_positions[j]
-
-	
+	# 2. Поведение NPC и агрессивных разбойников (только на поверхности)
+	if not is_in_dungeon and not is_overworld_mode:
+		_update_surface_npcs(delta)
 
 	# 4. Поведение дикой фауны (волки, вепри, олени, скелеты)
 
@@ -2145,53 +1972,105 @@ func _process(delta: float) -> void:
 				w_spr.offset.y = sin(Time.get_ticks_msec() * 0.002 + i) * -1.0
 
 		elif w.get("is_hostile", false):
-
-			# Волки, вепри и скелеты преследуют игрока
-
+			# Волки, вепри, скелеты и босс
+			var anim: LPCAnimationController2D = w.get("anim_ctrl", null)
 			if d_p < w["aggro_dist"]:
-
-				if d_p > 38.0:
-
-					var chase_dir = (player_pos - w_pos).normalized()
-
-					var new_w_pos = w_pos + chase_dir * w["speed"] * delta
-
-					var t_w = Vector2i(int(new_w_pos.x / TILE_SIZE), int(new_w_pos.y / TILE_SIZE))
-
-					if world_map.can_walk(t_w):
-
+				var to_player = player_pos - w_pos
+				var chase_dir = to_player.normalized()
+				if anim:
+					anim.set_direction_from_vector(chase_dir)
+				
+				if w.get("is_ranged", false) and d_p >= 75.0 and d_p <= 300.0:
+					# Стрельба скелета-лучника
+					if w["attack_cd"] <= 0.0:
+						w["attack_cd"] = 1.6
+						if anim:
+							anim.play(LPCAnimationController2D.AnimState.SLASH)
+						_spawn_projectile(w_pos + chase_dir * 14.0, chase_dir, 460.0, w["dmg"], false, 320.0, 0.0, w["name"])
+						_spawn_spark_particles(w_pos + chase_dir * 14.0, Color(0.3, 1.0, 0.4))
+						_play_sfx("sfx_bow_shot")
+						_log("[color=orange]⚠️ %s выпустил стрелу![/color]" % w["name"])
+				elif d_p > 34.0:
+					# Преследование с плавным скольжением по осям X и Y
+					var move_step = chase_dir * w["speed"] * delta
+					var new_w_pos = w_pos + move_step
+					var t_all = Vector2i(int(new_w_pos.x / TILE_SIZE), int(new_w_pos.y / TILE_SIZE))
+					var t_x = Vector2i(int(new_w_pos.x / TILE_SIZE), int(w_pos.y / TILE_SIZE))
+					var t_y = Vector2i(int(w_pos.x / TILE_SIZE), int(new_w_pos.y / TILE_SIZE))
+					
+					if world_map.can_walk(t_all):
 						w_pos = new_w_pos
-
-						wildlife_positions[i] = w_pos
-
-						w_spr.position = w_pos
-
-						var a_t: float = w.get("anim_t", 0.0) + delta * 12.0
-
+					elif world_map.can_walk(t_x):
+						w_pos.x = new_w_pos.x
+					elif world_map.can_walk(t_y):
+						w_pos.y = new_w_pos.y
+						
+					wildlife_positions[i] = w_pos
+					w_spr.position = w_pos
+					
+					if anim:
+						anim.play(LPCAnimationController2D.AnimState.WALK)
+					else:
+						var a_t: float = w.get("anim_t", 0.0) + delta * 14.0
 						w["anim_t"] = a_t
-
-						w_spr.offset.y = sin(a_t) * -3.0
-
+						w_spr.offset.y = sin(a_t) * -3.5
 						if chase_dir.x != 0: w_spr.flip_h = (chase_dir.x < 0)
-
-				elif w["attack_cd"] <= 0.0:
-
-					w["attack_cd"] = 1.3
-
-					_animal_attack_player(w)
-
+				else:
+					# Ближний бой (дистанция <= 34 px)
+					if w["attack_cd"] <= 0.0:
+						w["attack_cd"] = 0.95
+						_animal_attack_player(w)
+					else:
+						if anim and not anim.is_locked:
+							anim.play(LPCAnimationController2D.AnimState.IDLE)
 			else:
-
-				w_spr.offset.y = sin(Time.get_ticks_msec() * 0.002 + i) * -1.0
+				# Патрулирование в режиме покоя
+				var patrol_t: float = w.get("patrol_timer", 0.0) - delta
+				w["patrol_timer"] = patrol_t
+				if patrol_t <= 0.0:
+					w["patrol_timer"] = randf_range(2.0, 4.5)
+					var p_offset = Vector2(randf_range(-60.0, 60.0), randf_range(-60.0, 60.0))
+					w["patrol_target"] = w_pos + p_offset
+					
+				var p_target: Vector2 = w.get("patrol_target", w_pos)
+				var to_pt = p_target - w_pos
+				if to_pt.length() > 8.0:
+					var p_dir = to_pt.normalized()
+					var next_p = w_pos + p_dir * (w["speed"] * 0.45) * delta
+					var pt_tile = Vector2i(int(next_p.x / TILE_SIZE), int(next_p.y / TILE_SIZE))
+					if world_map.can_walk(pt_tile):
+						w_pos = next_p
+						wildlife_positions[i] = w_pos
+						w_spr.position = w_pos
+						if anim:
+							anim.set_direction_from_vector(p_dir)
+							anim.play(LPCAnimationController2D.AnimState.WALK)
+					else:
+						w["patrol_target"] = w_pos
+				else:
+					if anim:
+						anim.play(LPCAnimationController2D.AnimState.IDLE)
+					else:
+						w_spr.offset.y = sin(Time.get_ticks_msec() * 0.0025 + i) * 1.5
+					
+			if anim:
+				anim.update(delta)
 
 	
 
 	# Обновление HUD
 
 	if tm:
-		time_label.text = "🕒 %02d:%02d | Дн.%d, %s" % [tm.hour, tm.minute, tm.day, tm.SEASONS[tm.season_index]]
+		var s_icon = "🌱"
+		match tm.season_index:
+			0: s_icon = "🌱"
+			1: s_icon = "☀️"
+			2: s_icon = "🍂"
+			3: s_icon = "❄️"
+		var day_icon = "☀️" if (tm.hour >= 6 and tm.hour < 21) else "🌙"
+		time_label.text = "%s %02d:%02d | Дн.%d %s %s" % [day_icon, tm.hour, tm.minute, tm.day, s_icon, tm.SEASONS[tm.season_index]]
 	else:
-		time_label.text = "🕒 12:00 | Весна"
+		time_label.text = "☀️ 12:00 | Дн.1 🌱 Весна"
 
 	
 
@@ -2212,24 +2091,15 @@ func _process(delta: float) -> void:
 	var effective_max_stamina = clampf(player_max_stamina - player_fatigue, 25.0, player_max_stamina)
 
 	if health_bar: health_bar.value = (player_hp / player_max_hp) * 100.0
-
-	if hp_label: hp_label.text = "❤️ Здоровье: %.0f / %.0f" % [player_hp, player_max_hp]
-
+	if hp_label: hp_label.text = "%.0f / %.0f" % [player_hp, player_max_hp]
 	if stamina_bar: stamina_bar.value = (player_stamina / player_max_stamina) * 100.0
-
 	if stamina_label:
-
 		if player_fatigue > 0.0:
-
-			stamina_label.text = "⚡ Стамина: %.0f / %.0f (💤 Уст. -%.0f)" % [player_stamina, effective_max_stamina, player_fatigue]
-
+			stamina_label.text = "%.0f / %.0f (💤-%.0f)" % [player_stamina, effective_max_stamina, player_fatigue]
 		else:
-
-			stamina_label.text = "⚡ Выносливость: %.0f / %.0f" % [player_stamina, player_max_stamina]
-
+			stamina_label.text = "%.0f / %.0f" % [player_stamina, player_max_stamina]
 	if hunger_bar: hunger_bar.value = (player_hunger / player_max_hunger) * 100.0
-
-	if hunger_label: hunger_label.text = "🍖 Сытость: %.0f%%" % player_hunger
+	if hunger_label: hunger_label.text = "%.0f%%" % player_hunger
 
 	
 
@@ -2367,7 +2237,7 @@ func _perform_action_at_cursor(m_pos: Vector2) -> void:
 
 		_spawn_projectile(player_pos + shoot_dir * 14.0, shoot_dir, 560.0, final_dmg, true, max_dist, armor_pen, "Игрок")
 		_spawn_spark_particles(player_pos + shoot_dir * 16.0, Color(0.9, 0.9, 0.95))
-		_play_sfx("bow_shot")
+		_play_sfx("sfx_bow_shot")
 		
 		var recoil_tw = create_tween()
 		recoil_tw.tween_property(player_sprite, "offset", -shoot_dir * 3.5, 0.06)
@@ -2376,31 +2246,41 @@ func _perform_action_at_cursor(m_pos: Vector2) -> void:
 		_log("[color=cyan]🏹 Вы выпустили стрелу! (Осталось стрел: %d шт.)[/color]" % p.get_item_count("arrows"))
 
 		get_tree().create_timer(0.35).timeout.connect(func(): is_attacking = false)
-
 		return
 
-		
+	# 0. Проверка клика по двери рядом с игроком
+	var click_tile = Vector2i(int(m_pos.x / TILE_SIZE), int(m_pos.y / TILE_SIZE))
+	if player_pos.distance_to(m_pos) <= 90.0 and world_map.interactive_nodes.has(click_tile):
+		var nd = world_map.interactive_nodes[click_tile]
+		if nd.get("type") == "door":
+			var is_open = world_map.toggle_door(click_tile)
+			_play_sfx("sfx_door_open")
+			_log("[color=yellow]🚪 Дверь %s[/color]" % ("открыта" if is_open else "закрыта"))
+			return
 
 	is_attacking = true
-
 	attack_cooldown = 0.28
-
 	player_stamina -= 12.0
 
 	
 
 	var attack_dir = (m_pos - player_pos).normalized()
-
 	if attack_dir == Vector2.ZERO:
-
 		attack_dir = Vector2.DOWN
 
-	
+	if abs(attack_dir.x) > abs(attack_dir.y):
+		player_direction_row = 3 if attack_dir.x > 0 else 1
+	else:
+		player_direction_row = 2 if attack_dir.y > 0 else 0
 
 	# Взмах клинка / топора и выпад вперед
-
+	_play_sfx("sfx_sword_swing")
+	if player_anim_controller:
+		player_anim_controller.set_direction_from_vector(attack_dir)
+		player_anim_controller.play(LPCAnimationController2D.AnimState.SLASH)
+	elif player_sprite and player_sprite.hframes == 9:
+		player_sprite.frame = player_direction_row * 9
 	_spawn_slash_effect(player_pos + attack_dir * 28.0, attack_dir.angle())
-
 	var lunge_tw = create_tween()
 
 	lunge_tw.tween_property(player_sprite, "offset", attack_dir * 7.0, 0.07)
@@ -2601,9 +2481,8 @@ func _hit_npc(idx: int) -> void:
 		
 
 	npc["hp"] -= dmg
-
+	_play_sfx("sfx_sword_hit")
 	_spawn_spark_particles(npc_positions[idx], Color(1.0, 0.85, 0.2) if is_crit else Color(0.9, 0.25, 0.25))
-
 	_award_skill_xp("swordsmanship", 25.0)
 
 	
@@ -2724,72 +2603,76 @@ func _hit_wildlife(idx: int) -> void:
 		
 
 	w["hp"] -= dmg
-
+	_play_sfx("sfx_sword_hit")
 	_spawn_spark_particles(wildlife_positions[idx], Color(1.0, 0.85, 0.2) if is_crit else Color(0.9, 0.25, 0.25))
-
 	_award_skill_xp("swordsmanship", 25.0)
 
-	
+	# Анимация вздрагивания и вспышки урона (Flinch & Damage Flash)
+	var spr = wildlife_sprites[idx]
+	var anim: LPCAnimationController2D = w.get("anim_ctrl", null)
+	if anim:
+		anim.play(LPCAnimationController2D.AnimState.HURT)
+	elif is_instance_valid(spr):
+		var hit_dir = (wildlife_positions[idx] - player_pos).normalized()
+		var tw = create_tween()
+		tw.tween_property(spr, "modulate", Color(2.5, 0.4, 0.4), 0.05)
+		tw.tween_property(spr, "offset", hit_dir * 8.0, 0.05)
+		tw.tween_property(spr, "modulate", Color.WHITE, 0.12)
+		tw.tween_property(spr, "offset", Vector2.ZERO, 0.12)
 
 	if w["hp"] <= 0.0:
-
 		w["is_dead"] = true
-
-		wildlife_sprites[idx].modulate = Color(0.4, 0.4, 0.4, 0.5)
-
-		
+		if anim:
+			anim.play(LPCAnimationController2D.AnimState.HURT, -1, func(): spr.visible = false)
+		elif is_instance_valid(spr):
+			var d_tw = create_tween()
+			d_tw.set_parallel(true)
+			d_tw.tween_property(spr, "scale", Vector2(1.2, 0.1), 0.25)
+			d_tw.tween_property(spr, "modulate", Color(0.3, 0.3, 0.3, 0.0), 0.35)
+			_spawn_spark_particles(wildlife_positions[idx], Color(0.95, 0.92, 0.85))
 
 		# Убираем текст над павшим зверем
-
 		for child in wildlife_sprites[idx].get_children():
-
 			if child is Label:
-
 				child.visible = false
-
 				child.queue_free()
 
-				
-
 		_award_skill_xp("swordsmanship", 65.0)
-
 		_spawn_floating_text(wildlife_positions[idx], "+65 XP ⚔️", Color(0.3, 1.0, 0.3), 16)
 
-		
-
 		# Выдача трофеев охоты и прогресс контрактов
-
 		if p:
-
 			var drops = w.get("drops", {})
-
 			for it_id in drops.keys():
-
 				var count = drops[it_id]
-
 				p.add_item(it_id, count)
-
 				var it = ItemDatabase.get_item(it_id)
-
 				_log("[color=green]🐺 Добыча охотника: %s %s x%d![/color]" % [it.get("icon", "📦"), it.get("name", ""), count])
-
 				_spawn_floating_text(wildlife_positions[idx] + Vector2(0, 16), "+%d %s" % [count, it.get("name", "")], Color(0.95, 0.82, 0.3), 14)
 
-				
-
 			var w_type = w.get("type", "wolf")
-
 			var completed_quests = ContractManager.update_progress(p, "hunting", w_type, 1)
-
 			for cq in completed_quests:
-
 				_log("[color=gold][b]📜 ЦЕЛЬ КОНТРАКТА ВЫПОЛНЕНА: %s! Сдайте контракт на Доске Объявлений [ E ] или [ Q ].[/b][/color]" % cq.get("title", ""))
-
 				_spawn_floating_text(player_pos, "📜 Задание выполнено!", Color(1.0, 0.9, 0.2), 18)
 
 
-
 func _animal_attack_player(animal: Dictionary) -> void:
+	var a_idx = wildlife_data.find(animal)
+	if a_idx >= 0 and a_idx < wildlife_sprites.size():
+		var a_spr = wildlife_sprites[a_idx]
+		var anim: LPCAnimationController2D = animal.get("anim_ctrl", null)
+		if anim:
+			anim.set_direction_from_vector(player_pos - wildlife_positions[a_idx])
+			anim.play(LPCAnimationController2D.AnimState.SLASH)
+		elif is_instance_valid(a_spr):
+			var lunge_dir = (player_pos - wildlife_positions[a_idx]).normalized()
+			var a_tw = create_tween()
+			a_tw.tween_property(a_spr, "offset", lunge_dir * 12.0, 0.07)
+			a_tw.tween_property(a_spr, "offset", Vector2.ZERO, 0.12)
+		_spawn_slash_effect(wildlife_positions[a_idx] + (player_pos - wildlife_positions[a_idx]).normalized() * 18.0, (player_pos - wildlife_positions[a_idx]).angle())
+		if animal.get("is_boss", false):
+			_shake_screen(8.0, 0.3)
 
 	var dmg = randi_range(int(animal["dmg"] * 0.8), int(animal["dmg"] * 1.2))
 
@@ -2810,99 +2693,56 @@ func _animal_attack_player(animal: Dictionary) -> void:
 	
 
 	if is_blocking and player_stamina >= 6.0:
-
 		var shield_red = SkillSystem.get_shield_damage_reduction(p.skills) if p else 0.75
-
 		var shield_stamina = SkillSystem.get_shield_stamina_cost(p.skills) if p else 12.0
-
 		var blocked_dmg = int(dmg * (1.0 - shield_red))
-
 		player_stamina = maxf(0.0, player_stamina - shield_stamina)
-
 		stamina_regen_delay = 1.2
-
 		player_hp = maxf(0.0, player_hp - blocked_dmg)
-
+		_play_sfx("sfx_shield_block")
 		_spawn_spark_particles(player_pos, Color(0.4, 0.85, 1.0))
-
 		_award_skill_xp("shield_defense", 30.0)
-
 		_spawn_floating_text(player_pos, "🛡️ БЛОК (-%d)" % blocked_dmg, Color(0.4, 0.85, 1.0), 16)
-
 		_log("[color=cyan]🛡️ Вы отразили атаку %s! Получено всего %d урона.[/color]" % [animal["name"], blocked_dmg])
-
 	else:
-
 		player_hp = maxf(0.0, player_hp - dmg)
-
 		stamina_regen_delay = 1.0
-
+		_play_sfx("sfx_sword_hit")
 		_spawn_floating_text(player_pos, "-%d ❤️" % dmg, Color(1.0, 0.25, 0.25), 16)
-
 		_log("[color=red]⚠️ %s атаковал вас на %d урона![/color]" % [animal["name"], dmg])
-
 		
-
 	if player_hp <= 0.0:
-
 		_on_player_defeat()
 
 
-
 func _bandit_attack_player(idx: int) -> void:
-
 	var npc = npc_data[idx]
-
 	var gm = _get_game_manager()
-
 	var p: CharacterData = gm.player_data if gm else null
-
 	var dmg = randi_range(14, 24)
-
 	
-
 	if p and p.get("equipped_armor") != "":
-
 		var arm = ItemDatabase.get_item(p.get("equipped_armor"))
-
 		if arm.get("category") == "armor":
-
 			var def_val = arm.get("defense", 5)
-
 			dmg = maxi(3, dmg - def_val) # Защита от доспеха
-
 			
-
 	if stoneskin_timer > 0.0:
-
 		dmg = maxi(2, dmg - 10) # Защита от зелья каменной кожи (+10 DEF)
-
 	
-
 	if is_blocking and player_stamina >= 6.0:
-
 		var red = SkillSystem.get_shield_damage_reduction(p.skills) if p else 0.75
-
 		var st_cost = SkillSystem.get_shield_stamina_cost(p.skills) if p else 12.0
-
 		player_stamina = maxf(0.0, player_stamina - st_cost)
-
 		stamina_regen_delay = 1.2
-
 		dmg = int(dmg * (1.0 - red))
-
+		_play_sfx("sfx_shield_block")
 		_spawn_spark_particles(player_pos, Color(0.4, 0.85, 1.0))
-
 		_award_skill_xp("shield_defense", 30.0)
-
 		_spawn_floating_text(player_pos, "🛡️ БЛОК (-%d)" % dmg, Color(0.4, 0.85, 1.0), 16)
-
-		_log("[color=lightblue]🛡️ Вы заблокировали удар %s щитом! (-%d HP, затрачено %.0f сил)[/color]" % [npc["name"], dmg, st_cost])
-
 	else:
-
+		_play_sfx("sfx_sword_hit")
 		_spawn_floating_text(player_pos, "-%d ❤️" % dmg, Color(1.0, 0.25, 0.25), 16)
-
 		_log("[color=red]⚔️ %s нанес вам %d урона![/color]" % [npc["name"], dmg])
 
 	
@@ -2920,36 +2760,27 @@ func _bandit_attack_player(idx: int) -> void:
 
 
 func _on_player_defeat() -> void:
-
 	_log("[color=red][b]💀 ВЫ ПОГИБЛИ В БОЮ![/b][/color]")
-
 	_log("[color=gold]Вас спасли и перенесли в таверну «Пьяный Вепрь». Здоровье восстановлено.[/color]")
-
 	
-
 	var gm = _get_game_manager()
-
 	var p = gm.player_data if gm else null
-
 	if p:
-
 		var loss = int(p.gold * 0.2)
-
 		p.gold = maxi(0, p.gold - loss)
-
 		if loss > 0:
-
 			_log("[color=orange]За спасение и услуги лекаря отдано %d золотых.[/color]" % loss)
-
 	
+	if is_in_dungeon:
+		_toggle_dungeon() # Возвращаемся из подземелья на поверхность
 
 	player_hp = player_max_hp
-
 	player_stamina = player_max_stamina
-
-	player_pos = Vector2(23.5 * TILE_SIZE, 24.5 * TILE_SIZE)
-
+	player_pos = Vector2(24.5 * TILE_SIZE, 27.5 * TILE_SIZE) # Внутри таверны
 	player_sprite.position = player_pos
+	camera.position = player_pos
+	camera.reset_smoothing()
+	_spawn_floating_text(player_pos, "🏥 ВОЗРОЖДЕНИЕ В ТАВЕРНЕ", Color(1.0, 0.85, 0.2), 20)
 
 
 
@@ -3164,10 +2995,11 @@ func _handle_interaction_key() -> void:
 
 					return
 
-				elif nd["type"] == "cave_entrance":
-
+				elif nd["type"] == "cave_entrance" or nd["type"] == "ladder_up":
 					_toggle_dungeon()
-
+					return
+				elif nd["type"] == "sarcophagus":
+					_open_sarcophagus(t_pos)
 					return
 
 				elif nd["type"] == "windmill":
@@ -3631,61 +3463,72 @@ func _open_tannery_menu() -> void:
 			_open_tannery_menu()
 
 		else:
-
 			_log("[color=red]Недостаточно кожи (требуется 2 листа кожи 🧥)![/color]")
-
 	)
 
 
+func _open_sarcophagus(pos: Vector2i) -> void:
+	if not world_map.interactive_nodes.has(pos): return
+	var node = world_map.interactive_nodes[pos]
+	if node.get("is_opened", false):
+		_log("[color=gray]⚰️ Этот древний саркофаг уже вскрыт и пуст.[/color]")
+		return
+		
+	node["is_opened"] = true
+	_play_sfx("sfx_door_open")
+	_shake_screen(4.0, 0.2)
+	
+	var gm = _get_game_manager()
+	var p: CharacterData = gm.player_data if gm else null
+	if p:
+		p.add_item("dungeon_relic", 1)
+		p.add_item("ancient_gold_coin", 5)
+		p.gold += 35
+		var completed_quests = ContractManager.update_progress(p, "kill", "crypt_clearing", 1)
+		for cq in completed_quests:
+			_log("[color=gold][b]📜 КОНТРАКТ ВЫПОЛНЕН: %s! Сдайте на доске [ Q ].[/b][/color]" % cq.get("title", ""))
+			
+	_log("[color=gold][b]⚰️ Вы сдвинули каменную крышку саркофага! Найдено: +1 Древняя Реликвия 👑, +5 Древних монет, +35 Золота 💰![/b][/color]")
+	_spawn_floating_text(player_pos, "👑 РЕЛИКВИЯ НАЙДЕНА!", Color(1.0, 0.85, 0.2), 20)
+
 
 func _toggle_dungeon() -> void:
-
 	if not is_in_dungeon:
-
 		# Спуск в Склеп Забытых
-
 		is_in_dungeon = true
-
 		player_pos = Vector2(8.5 * TILE_SIZE, 8.5 * TILE_SIZE)
-
 		player_sprite.position = player_pos
-
 		camera.position = player_pos
-
 		day_night_modulate.color = Color(0.06, 0.06, 0.12) # Глубокая тьма подземелья
+		
+		# Скрываем жителей деревни и собаку в подземелье
+		for s in npc_sprites:
+			if is_instance_valid(s): s.visible = false
+		if is_instance_valid(dog_sprite):
+			dog_sprite.visible = false
 
 		_generate_dungeon_level()
-
 		_log("[color=red][b]🕳️ Вы спустились в холодный мрак «Склепа Забытых»...[/b][/color]")
-
 		_spawn_floating_text(player_pos, "💀 СКЛЕП ЗАБЫТЫХ", Color(0.95, 0.25, 0.25), 20)
-
 	else:
-
 		# Подъем на поверхность
-
 		is_in_dungeon = false
-
-		# Вход в пещеру на поверхности находится на (6, 6). Спавним игрока перед входом на (6.5, 7.5)
-
 		player_pos = Vector2(6.5 * TILE_SIZE, 7.5 * TILE_SIZE)
-
 		player_sprite.position = player_pos
-
 		camera.position = player_pos
 
-		
-
 		# Восстанавливаем поверхность деревни Олдерии
-
 		world_map.generate_world()
-
 		world_map.queue_redraw()
-
+		
+		# Возвращаем жителей деревни и собаку
+		for s in npc_sprites:
+			if is_instance_valid(s): s.visible = true
+		if is_instance_valid(dog_sprite):
+			dog_sprite.visible = true
+			
 		_spawn_wildlife()
-
 		_log("[color=gold][b]☀️ Вы поднялись на поверхность деревни Олдерии.[/b][/color]")
-
 		_spawn_floating_text(player_pos, "☀️ ДЕРЕВНЯ ОЛДЕРИИ", Color(1.0, 0.9, 0.3), 20)
 
 
@@ -3730,252 +3573,205 @@ func _generate_dungeon_level() -> void:
 
 	# Выход из подземелья (лестница наверх)
 
+	# Выход из подземелья (лестница наверх)
 	world_map.interactive_nodes[Vector2i(8, 8)] = {
-
-		"type": "cave_entrance",
-
+		"type": "ladder_up",
 		"name": "🪜 Лестница на Поверхность ☀️",
-
+		"is_furniture": true,
 		"hp": 999
-
 	}
-
-	
 
 	# Древние саркофаги и сундуки с реликвиями
-
 	world_map.interactive_nodes[Vector2i(22, 8)] = {
-
-		"type": "chest",
-
-		"name": "Древний Саркофаг Королей 📦",
-
-		"inventory": {"dungeon_relic": 1, "ancient_gold_coin": 4, "sword_2h": 1},
-
+		"type": "sarcophagus",
+		"name": "⚰️ Древний Саркофаг Королей",
+		"is_furniture": true,
+		"is_opened": false,
 		"hp": 999
-
 	}
-
-	world_map.interactive_nodes[Vector2i(22, 22)] = {
-
+	world_map.interactive_nodes[Vector2i(22, 20)] = {
 		"type": "chest",
-
-		"name": "Тайник Забытых 📦",
-
-		"inventory": {"ancient_gold_coin": 8, "potion_health": 2, "iron_ingot": 3},
-
+		"name": "📦 Золотой Ковчег Склепа",
+		"inventory": {"gold_coins": 80, "ancient_gold_coin": 6, "iron_ingot": 4},
+		"is_furniture": true,
 		"hp": 999
-
 	}
-
-	
 
 	# Факелы склепа
-
 	world_map.interactive_nodes[Vector2i(10, 6)] = {"type": "campfire", "name": "Факел Склепа 🔥", "hp": 999}
-
 	world_map.interactive_nodes[Vector2i(20, 6)] = {"type": "campfire", "name": "Факел Склепа 🔥", "hp": 999}
-
 	world_map.interactive_nodes[Vector2i(10, 24)] = {"type": "campfire", "name": "Факел Склепа 🔥", "hp": 999}
-
 	world_map.interactive_nodes[Vector2i(20, 24)] = {"type": "campfire", "name": "Факел Склепа 🔥", "hp": 999}
-
-	
 
 	world_map.queue_redraw()
 
-	
-
-	# Спавним Скелетов-стражей склепа
-
+	# Спавним бестиарий и Босса Склепа
 	wildlife_data.clear()
-
 	wildlife_positions.clear()
-
 	for s in wildlife_sprites:
-
-		s.queue_free()
-
+		if is_instance_valid(s):
+			s.queue_free()
 	wildlife_sprites.clear()
 
-	
-
-	var skel_spawns = [
-
-		Vector2i(12, 12),
-
-		Vector2i(20, 10),
-
-		Vector2i(20, 20)
-
-	]
-
+	# 1. Скелеты-стражи
+	var skel_spawns = [Vector2i(12, 12), Vector2i(20, 10)]
 	for sp in skel_spawns:
-
 		_create_animal({
-
 			"type": "skeleton",
-
 			"name": "Скелет-страж 💀",
-
 			"role": "Скелет",
-
 			"hp": 55.0,
-
 			"max_hp": 55.0,
-
-			"dmg": 16.0,
-
-			"speed": 95.0,
-
-			"aggro_dist": 150.0,
-
+			"dmg": 15.0,
+			"speed": 105.0,
+			"aggro_dist": 480.0,
 			"attack_cd": 0.0,
-
 			"is_hostile": true,
-
 			"drops": {"ancient_gold_coin": 2, "iron_ore": 2}
-
 		}, sp)
+
+	# 2. Скелет-лучник
+	_create_animal({
+		"type": "skeleton_archer",
+		"name": "Скелет-лучник 🏹",
+		"role": "Скелет",
+		"hp": 45.0,
+		"max_hp": 45.0,
+		"dmg": 14.0,
+		"speed": 90.0,
+		"aggro_dist": 420.0,
+		"is_ranged": true,
+		"attack_cd": 0.0,
+		"is_hostile": true,
+		"drops": {"arrows": 14, "ancient_gold_coin": 3}
+	}, Vector2i(18, 14))
+
+	# 3. БОСС: Проклятый Рыцарь Мальгрим
+	_create_animal({
+		"type": "boss_malgrim",
+		"name": "💀 Проклятый Рыцарь Мальгрим (БОСС)",
+		"role": "Босс",
+		"hp": 250.0,
+		"max_hp": 250.0,
+		"dmg": 26.0,
+		"speed": 100.0,
+		"aggro_dist": 560.0,
+		"attack_cd": 0.0,
+		"is_hostile": true,
+		"is_boss": true,
+		"drops": {"sword_paladin_sun": 1, "dungeon_relic": 2, "gold_coins": 150}
+	}, Vector2i(22, 22))
 
 
 
 # === ГЛОБАЛЬНАЯ КАРТА И ПУТЕШЕСТВИЯ [M] ===
 
+func _exit_to_overworld() -> void:
+	_log("[color=gold]🗺️ Вы вышли за пределы поселения на королевский тракт Олдерии.[/color]")
+	_set_overworld_mode(true)
+
+
 func _toggle_overworld_mode() -> void:
+	_set_overworld_mode(not is_overworld_mode)
 
-	is_overworld_mode = not is_overworld_mode
 
+func _set_overworld_mode(enable: bool) -> void:
+	is_overworld_mode = enable
+	_close_all_modals()
+	
 	if is_overworld_mode:
-
-		_close_all_modals()
-
 		world_map.visible = false
-
 		overworld_map.visible = true
-
 		overworld_map.set_player_tile(overworld_player_tile)
-
 		camera.zoom = Vector2(0.95, 0.95)
-
 		
-
 		# Отключаем локальный свет, факел и NPC
-
 		player_torch.enabled = false
-
 		for l in env_lights: l.enabled = false
-
-		for s in npc_sprites: s.visible = false
-
-		for s in wildlife_sprites: s.visible = false
-
-		
-
+		for s in npc_sprites:
+			if is_instance_valid(s): s.visible = false
+		for s in wildlife_sprites:
+			if is_instance_valid(s): s.visible = false
+			
 		player_pos = Vector2(overworld_player_tile.x * OverworldMap2D.TILE_SIZE + OverworldMap2D.TILE_SIZE/2.0, overworld_player_tile.y * OverworldMap2D.TILE_SIZE + OverworldMap2D.TILE_SIZE/2.0)
-
-		player_sprite.position = player_pos
-
-		_log("[color=gold]🗺️ Вы вышли на глобальную карту Олдерии. WASD — путешествие | [ E ] — войти в локацию | [ M ] — вернуться[/color]")
-
+		if player_sprite: player_sprite.position = player_pos
+		if camera:
+			camera.position = player_pos
+			camera.reset_smoothing()
+			
+		_log("[color=gold]🗺️ Вы вышли на глобальную карту Олдерии. WASD — путешествие | [ E ] — войти в локацию | [ M ] — закрыть[/color]")
 		_spawn_floating_text(player_pos, "🗺️ КАРТА ОЛДЕРИИ", Color(1.0, 0.9, 0.4), 18)
-
 	else:
-
-		_close_all_modals()
-
 		overworld_map.visible = false
-
 		world_map.visible = true
-
 		camera.zoom = Vector2(1.35, 1.35)
-
 		
-
 		# Включаем локальный свет и жителей
-
 		player_torch.enabled = torch_enabled
-
 		for l in env_lights: l.enabled = true
-
-		for s in npc_sprites: s.visible = true
-
-		for s in wildlife_sprites: s.visible = true
-
-		
-
-		player_pos = Vector2(23.5 * TILE_SIZE, 24.5 * TILE_SIZE)
-
-		player_sprite.position = player_pos
-
-		_log("[color=gold]🏡 Вы вернулись в локальную зону: %s[/color]" % current_location_id)
-
+		for s in npc_sprites:
+			if is_instance_valid(s): s.visible = true
+		for s in wildlife_sprites:
+			if is_instance_valid(s): s.visible = true
+			
+		_log("[color=gold]🏡 Локальная зона: %s[/color]" % current_location_id)
 
 
 func _check_overworld_encounters() -> void:
-
-	if randf() < 0.035:
-
+	if randf() < 0.045:
 		var gm = _get_game_manager()
-
 		var p: CharacterData = gm.player_data if gm else null
-
 		var r = randf()
-
-		if r < 0.5:
-
+		if r < 0.35:
 			_log("[color=red]⚠️ На тракте из засады выскочила шайка разбойников![/color]")
-
 			_spawn_floating_text(player_pos, "⚔️ ЗАСАДА РАЗБОЙНИКОВ!", Color(1.0, 0.25, 0.25), 18)
-
-			var dmg = randi_range(12, 22)
-
+			var dmg = randi_range(10, 18)
 			player_hp = maxf(10.0, player_hp - dmg)
-
 			_award_skill_xp("swordsmanship", 40.0)
-
+			_play_sfx("sfx_hit")
+		elif r < 0.70:
+			_log("[color=cyan]🛡️ Вы встретили конный патруль королевской стражи! «Спокойной дороги, путник!» (+15 Здоровья)[/color]")
+			player_hp = minf(player_max_hp, player_hp + 15.0)
+			_spawn_floating_text(player_pos, "🛡️ Патруль Стражи (+15 HP)", Color(0.4, 0.9, 1.0), 16)
 		else:
-
-			_log("[color=green]🤝 Вы встретили бродячего купца. Он поделился провизией (+1 Хлеб)![/color]")
-
+			_log("[color=green]🤝 Вы встретили бродячего купца. Он поделился провизией (+1 Свежий Хлеб)![/color]")
 			if p: p.add_item("bread", 1)
-
 			_spawn_floating_text(player_pos, "+1 Хлеб 🍞", Color(0.3, 1.0, 0.3), 16)
 
 
-
 func _enter_overworld_location() -> void:
-
 	var loc = overworld_map.get_location_at(overworld_player_tile)
-
 	if loc.size() > 0:
-
 		current_location_id = loc["id"]
-
-		_toggle_overworld_mode()
-
-		_log("[color=gold][b]🏰 Вы вошли в локацию: %s![/b][/color]" % loc["name"])
-
-		_spawn_floating_text(player_pos, "ВХОД: " + loc["name"], Color(1.0, 0.9, 0.3), 20)
-
+		var loc_type = loc.get("type", "village")
 		
-
+		# 1. Перестраиваем карту под выбранный биом
+		world_map.generate_world(loc_type, current_location_id)
+		
+		# 2. Переспавниваем жителей для данной зоны
+		_spawn_npcs(loc_type)
+		
+		# 3. Переходим в локальный режим
+		_set_overworld_mode(false)
+		
+		# 4. Позиционируем игрока у южного въезда
+		player_pos = Vector2(31.5 * TILE_SIZE, 58.0 * TILE_SIZE)
+		if player_sprite: player_sprite.position = player_pos
+		if camera:
+			camera.position = player_pos
+			camera.reset_smoothing()
+			
+		_log("[color=gold][b]🏰 Вы вошли в локацию: %s![/b][/color]" % loc["name"])
+		_spawn_floating_text(player_pos, "ВХОД: " + loc["name"], Color(1.0, 0.9, 0.3), 20)
+		
 		var gm = _get_game_manager()
-
 		var p: CharacterData = gm.player_data if gm else null
-
 		if p:
-
 			var completed_quests = ContractManager.update_progress(p, "delivery", loc["id"], 1)
-
 			for cq in completed_quests:
-
 				_log("[color=gold][b]📜 КУРЬЕРСКОЕ ПОРУЧЕНИЕ ВЫПОЛНЕНО: %s! Сдайте контракт [ Q ].[/b][/color]" % cq.get("title", ""))
-
 				_spawn_floating_text(player_pos, "📜 Депеша доставлена!", Color(1.0, 0.9, 0.2), 18)
-
 	else:
-
 		_log("Здесь дикая равнина. Разбейте лагерь или двигайтесь к поселениям на карте.")
 
 
@@ -4031,26 +3827,18 @@ func _hire_caravan_travel(dest_tile: Vector2i, loc_id: String, loc_name: String)
 
 
 func _toggle_building_mode() -> void:
-
-	is_building_mode = not is_building_mode
-
-	if is_building_mode:
-
-		_close_all_modals()
-
-		is_ui_open = true
-
-		build_panel.visible = true
-
-		_refresh_build_panel()
-
-	else:
-
-		if build_panel: build_panel.visible = false
-
+	if construction_modal == null:
+		return
+	if construction_modal.is_open():
+		construction_modal.close()
 		is_ui_open = false
-
+		is_building_mode = false
 		_log("Режим строительства выключен.")
+	else:
+		_close_all_modals()
+		is_ui_open = true
+		is_building_mode = true
+		construction_modal.open()
 
 
 
@@ -4128,7 +3916,7 @@ func _build_tile_at_mouse() -> void:
 
 # =========================================================
 
-func _make_medieval_panel_style(bg_color: Color = Color(0.10, 0.11, 0.14, 0.94), border_color: Color = Color(0.78, 0.62, 0.28, 1.0), border_w: int = 2, radius: int = 6) -> StyleBoxFlat:
+func _make_medieval_panel_style(bg_color: Color = Color(0.10, 0.11, 0.14, 0.94), border_color: Color = Color(0.78, 0.62, 0.28, 1.0), border_w: int = 2, radius: int = 6) -> StyleBox:
 	# Делегирует в autoload UIHelpers (чистый статический хелпер оформления).
 	return UIHelpers.panel_style(bg_color, border_color, border_w, radius)
 
@@ -4151,448 +3939,285 @@ func _build_ui_hud() -> void:
 	
 
 	# Верхняя панель (Деревянно-золотая рамка)
-
 	var top_panel = PanelContainer.new()
-
 	top_panel.position = Vector2(16, 10)
-
 	top_panel.custom_minimum_size = Vector2(1248, 40)
-
-	top_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.12, 0.13, 0.17, 0.95), Color(0.75, 0.60, 0.25), 2, 6))
-
+	top_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(6))
 	canvas.add_child(top_panel)
 
-	
-
 	var top_bar = HBoxContainer.new()
-
 	top_bar.add_theme_constant_override("separation", 6)
-
 	top_panel.add_child(top_bar)
 
-	
-
 	time_label = Label.new()
-
 	time_label.text = "🕒 12:00 | Весна, 1-й год"
-
-	time_label.add_theme_font_size_override("font_size", 12)
-
-	time_label.add_theme_color_override("font_color", Color(0.95, 0.88, 0.65))
-
+	time_label.add_theme_font_size_override("font_size", 13)
+	time_label.add_theme_color_override("font_color", Color(0.98, 0.92, 0.75))
+	var med_font = UIHelpers.get_font(true)
+	if med_font:
+		time_label.add_theme_font_override("font", med_font)
 	top_bar.add_child(time_label)
 
-	
-
 	var sep = VSeparator.new()
-
 	top_bar.add_child(sep)
 
-	
-
 	var inv_btn = Button.new()
-
 	inv_btn.text = "🎒 Инвентарь [I]"
-
 	_style_button(inv_btn)
-
 	inv_btn.pressed.connect(_toggle_inventory)
-
 	top_bar.add_child(inv_btn)
 
-	
-
 	var skill_btn = Button.new()
-
 	skill_btn.text = "📖 Навыки [K]"
-
 	_style_button(skill_btn)
-
 	skill_btn.pressed.connect(_toggle_skills)
-
 	top_bar.add_child(skill_btn)
 
-	
-
 	var quest_btn = Button.new()
-
 	quest_btn.text = "📜 Задания [Q]"
-
 	_style_button(quest_btn)
-
 	quest_btn.pressed.connect(_toggle_contracts_menu)
-
 	top_bar.add_child(quest_btn)
 
-	
-
 	var market_btn = Button.new()
-
 	market_btn.text = "⚖️ Рынок"
-
 	_style_button(market_btn)
-
 	market_btn.pressed.connect(_open_market_trade)
-
 	top_bar.add_child(market_btn)
 
-	
-
 	var smith_btn = Button.new()
-
 	smith_btn.text = "⚒️ Кузница"
-
 	_style_button(smith_btn)
-
 	smith_btn.pressed.connect(_open_smithing_menu)
-
 	top_bar.add_child(smith_btn)
 
-	
-
 	var build_btn = Button.new()
-
 	build_btn.text = "🔨 Стройка [B]"
-
 	_style_button(build_btn)
-
 	build_btn.pressed.connect(_toggle_building_mode)
-
 	top_bar.add_child(build_btn)
 
-	
-
 	var map_btn = Button.new()
-
 	map_btn.text = "🗺️ Карта [M]"
-
 	_style_button(map_btn)
-
 	map_btn.pressed.connect(_toggle_overworld_mode)
-
 	top_bar.add_child(map_btn)
 
-	
-
 	var party_btn = Button.new()
-
 	party_btn.text = "👥 Дружина [C]"
-
 	_style_button(party_btn)
-
 	party_btn.pressed.connect(_toggle_party_menu)
-
 	top_bar.add_child(party_btn)
 
-	
-
 	var estate_btn = Button.new()
-
 	estate_btn.text = "🏰 Поместье [H]"
-
 	_style_button(estate_btn)
-
 	estate_btn.pressed.connect(_toggle_estate_menu)
-
 	top_bar.add_child(estate_btn)
 
-	
-
 	var settlement_btn = Button.new()
-
 	settlement_btn.text = "🏛️ Поселение [T]"
-
 	_style_button(settlement_btn)
-
 	settlement_btn.pressed.connect(_toggle_settlement_menu)
-
 	top_bar.add_child(settlement_btn)
 
-	
+	# Здоровье, выносливость и сытость (Элегантный плавающий HUD с королевским медальоном)
+	var stats_hud = HBoxContainer.new()
+	stats_hud.position = Vector2(16, 56)
+	stats_hud.add_theme_constant_override("separation", 10)
+	canvas.add_child(stats_hud)
 
-	# Здоровье, выносливость и сытость (Орнаментная плашка)
+	# Королевский золотой медальон герба слева
+	var crest_rect = TextureRect.new()
+	crest_rect.texture = UIHelpers._get_texture("res://assets/ui/hud_crest.png")
+	crest_rect.custom_minimum_size = Vector2(48, 48)
+	crest_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	stats_hud.add_child(crest_rect)
 
-	var stats_panel = PanelContainer.new()
+	# Блок тонких золоченых полосок
+	var bars_box = VBoxContainer.new()
+	bars_box.add_theme_constant_override("separation", 4)
+	bars_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats_hud.add_child(bars_box)
 
-	stats_panel.position = Vector2(16, 58)
+	var med_f = UIHelpers.get_font(true)
 
-	stats_panel.custom_minimum_size = Vector2(260, 94)
+	# 1. Полоска здоровья (Рубиновый кристалл)
+	var hp_row = HBoxContainer.new()
+	hp_row.add_theme_constant_override("separation", 6)
+	hp_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	bars_box.add_child(hp_row)
 
-	stats_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.14, 0.90), Color(0.55, 0.45, 0.20), 1, 4))
-
-	canvas.add_child(stats_panel)
-
-	
-
-	var stats_box = VBoxContainer.new()
-
-	stats_box.add_theme_constant_override("separation", 6)
-
-	stats_panel.add_child(stats_box)
-
-	
-
-	# Полоска здоровья (Рубиновый градиент)
+	var hp_icon = TextureRect.new()
+	hp_icon.texture = UIHelpers._get_texture("res://assets/ui/icon_heart.png")
+	hp_icon.custom_minimum_size = Vector2(16, 16)
+	hp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hp_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hp_row.add_child(hp_icon)
 
 	health_bar = ProgressBar.new()
-
-	health_bar.custom_minimum_size = Vector2(236, 22)
-
+	health_bar.custom_minimum_size = Vector2(180, 14)
 	health_bar.value = 100.0
-
 	health_bar.show_percentage = false
-
-	var hp_bg = _make_medieval_panel_style(Color(0.22, 0.05, 0.05, 0.9), Color(0.45, 0.12, 0.12), 1, 3)
-
-	var hp_fill = _make_medieval_panel_style(Color(0.85, 0.16, 0.16), Color(0.95, 0.35, 0.35), 1, 3)
-
-	health_bar.add_theme_stylebox_override("background", hp_bg)
-
-	health_bar.add_theme_stylebox_override("fill", hp_fill)
+	health_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UIHelpers.style_sleek_bar(health_bar, "hp")
+	hp_row.add_child(health_bar)
 
 	hp_label = Label.new()
-
-	hp_label.text = "❤️ Здоровье: 100 / 100"
-
-	hp_label.position = Vector2(10, 0)
-
-	hp_label.add_theme_font_size_override("font_size", 12)
-
+	hp_label.text = "100 / 100"
+	hp_label.add_theme_font_size_override("font_size", 11)
+	hp_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.92))
 	hp_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	hp_label.add_theme_constant_override("shadow_offset_x", 1)
+	hp_label.add_theme_constant_override("shadow_offset_y", 1)
+	hp_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if med_f: hp_label.add_theme_font_override("font", med_f)
+	hp_row.add_child(hp_label)
 
-	health_bar.add_child(hp_label)
+	# 2. Полоска выносливости (Изумрудная энергия)
+	var st_row = HBoxContainer.new()
+	st_row.add_theme_constant_override("separation", 6)
+	st_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	bars_box.add_child(st_row)
 
-	stats_box.add_child(health_bar)
-
-	
-
-	# Полоска выносливости (Изумрудно-янтарный градиент)
+	var st_icon = TextureRect.new()
+	st_icon.texture = UIHelpers._get_texture("res://assets/ui/icon_stamina.png")
+	st_icon.custom_minimum_size = Vector2(16, 16)
+	st_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	st_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	st_row.add_child(st_icon)
 
 	stamina_bar = ProgressBar.new()
-
-	stamina_bar.custom_minimum_size = Vector2(236, 20)
-
+	stamina_bar.custom_minimum_size = Vector2(180, 14)
 	stamina_bar.value = 100.0
-
 	stamina_bar.show_percentage = false
-
-	var st_bg = _make_medieval_panel_style(Color(0.06, 0.18, 0.10, 0.9), Color(0.12, 0.35, 0.20), 1, 3)
-
-	var st_fill = _make_medieval_panel_style(Color(0.18, 0.72, 0.35), Color(0.35, 0.88, 0.50), 1, 3)
-
-	stamina_bar.add_theme_stylebox_override("background", st_bg)
-
-	stamina_bar.add_theme_stylebox_override("fill", st_fill)
+	stamina_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UIHelpers.style_sleek_bar(stamina_bar, "stamina")
+	st_row.add_child(stamina_bar)
 
 	stamina_label = Label.new()
-
-	stamina_label.text = "⚡ Выносливость: 100 / 100"
-
-	stamina_label.position = Vector2(10, -1)
-
-	stamina_label.add_theme_font_size_override("font_size", 12)
-
+	stamina_label.text = "100 / 100"
+	stamina_label.add_theme_font_size_override("font_size", 11)
+	stamina_label.add_theme_color_override("font_color", Color(0.88, 1.0, 0.90))
 	stamina_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	stamina_label.add_theme_constant_override("shadow_offset_x", 1)
+	stamina_label.add_theme_constant_override("shadow_offset_y", 1)
+	stamina_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if med_f: stamina_label.add_theme_font_override("font", med_f)
+	st_row.add_child(stamina_label)
 
-	stamina_bar.add_child(stamina_label)
+	# 3. Полоска сытости (Янтарный мед/хлеб)
+	var hu_row = HBoxContainer.new()
+	hu_row.add_theme_constant_override("separation", 6)
+	hu_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	bars_box.add_child(hu_row)
 
-	stats_box.add_child(stamina_bar)
-
-	
-
-	# Полоска сытости (Теплый хлебный градиент)
+	var hu_icon = TextureRect.new()
+	hu_icon.texture = UIHelpers._get_texture("res://assets/ui/icon_bread.png")
+	hu_icon.custom_minimum_size = Vector2(16, 16)
+	hu_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hu_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hu_row.add_child(hu_icon)
 
 	hunger_bar = ProgressBar.new()
-
-	hunger_bar.custom_minimum_size = Vector2(236, 18)
-
+	hunger_bar.custom_minimum_size = Vector2(180, 14)
 	hunger_bar.value = 100.0
-
 	hunger_bar.show_percentage = false
-
-	var hu_bg = _make_medieval_panel_style(Color(0.18, 0.12, 0.05, 0.9), Color(0.35, 0.22, 0.10), 1, 3)
-
-	var hu_fill = _make_medieval_panel_style(Color(0.85, 0.58, 0.18), Color(0.95, 0.72, 0.30), 1, 3)
-
-	hunger_bar.add_theme_stylebox_override("background", hu_bg)
-
-	hunger_bar.add_theme_stylebox_override("fill", hu_fill)
+	hunger_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UIHelpers.style_sleek_bar(hunger_bar, "hunger")
+	hu_row.add_child(hunger_bar)
 
 	hunger_label = Label.new()
-
-	hunger_label.text = "🍖 Сытость: 100%"
-
-	hunger_label.position = Vector2(10, -1)
-
+	hunger_label.text = "100%"
 	hunger_label.add_theme_font_size_override("font_size", 11)
-
+	hunger_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.75))
 	hunger_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-
-	hunger_bar.add_child(hunger_label)
-
-	stats_box.add_child(hunger_bar)
-
-	
+	hunger_label.add_theme_constant_override("shadow_offset_x", 1)
+	hunger_label.add_theme_constant_override("shadow_offset_y", 1)
+	hunger_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if med_f: hunger_label.add_theme_font_override("font", med_f)
+	hu_row.add_child(hunger_label)
 
 	# HUD дружины (Слева под характеристиками игрока)
-
 	party_hud_panel = PanelContainer.new()
-
 	party_hud_panel.position = Vector2(16, 158)
-
 	party_hud_panel.custom_minimum_size = Vector2(260, 0)
-
-	party_hud_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.14, 0.90), Color(0.55, 0.45, 0.20), 1, 4))
-
+	party_hud_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(8))
 	canvas.add_child(party_hud_panel)
 
-	
-
 	party_hud_box = VBoxContainer.new()
-
 	party_hud_box.add_theme_constant_override("separation", 4)
-
 	party_hud_panel.add_child(party_hud_box)
-
 	party_hud_panel.visible = false
 
-	
-
 	# Верхний правый угол: Компактный HUD-трекер активного контракта
-
 	quest_tracker_panel = PanelContainer.new()
-
 	quest_tracker_panel.position = Vector2(936, 58)
-
 	quest_tracker_panel.custom_minimum_size = Vector2(328, 64)
-
-	quest_tracker_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.14, 0.90), Color(0.60, 0.50, 0.22), 1, 4))
-
+	quest_tracker_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(8))
 	canvas.add_child(quest_tracker_panel)
 
-	
-
 	var q_box = VBoxContainer.new()
-
 	q_box.add_theme_constant_override("separation", 2)
-
 	quest_tracker_panel.add_child(q_box)
 
-	
-
 	quest_tracker_title = Label.new()
-
 	quest_tracker_title.text = "📜 Задание: Нет активных"
-
 	quest_tracker_title.add_theme_font_size_override("font_size", 12)
-
 	quest_tracker_title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55))
-
 	quest_tracker_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-
 	quest_tracker_title.custom_minimum_size = Vector2(304, 16)
-
 	q_box.add_child(quest_tracker_title)
 
-	
-
 	quest_tracker_desc = Label.new()
-
 	quest_tracker_desc.text = "Доска Заказов на площади [E] или меню [Q]"
-
 	quest_tracker_desc.add_theme_font_size_override("font_size", 11)
-
 	quest_tracker_desc.add_theme_color_override("font_color", Color(0.80, 0.82, 0.86))
-
 	quest_tracker_desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-
 	quest_tracker_desc.custom_minimum_size = Vector2(304, 15)
-
 	q_box.add_child(quest_tracker_desc)
 
-	
-
 	quest_tracker_bar = ProgressBar.new()
-
 	quest_tracker_bar.custom_minimum_size = Vector2(304, 10)
-
 	quest_tracker_bar.show_percentage = false
-
-	var q_bg = _make_medieval_panel_style(Color(0.15, 0.12, 0.08, 0.9), Color(0.35, 0.25, 0.12), 1, 2)
-
-	var q_fill = _make_medieval_panel_style(Color(0.85, 0.65, 0.15), Color(1.0, 0.80, 0.30), 1, 2)
-
-	quest_tracker_bar.add_theme_stylebox_override("background", q_bg)
-
-	quest_tracker_bar.add_theme_stylebox_override("fill", q_fill)
-
+	UIHelpers.style_progress_bar(quest_tracker_bar, "hunger")
 	q_box.add_child(quest_tracker_bar)
 
-	
-
 	# Нижняя панель
-
 	var bot_bar = HBoxContainer.new()
-
 	bot_bar.position = Vector2(16, 566)
-
 	bot_bar.custom_minimum_size = Vector2(1248, 138)
-
 	bot_bar.add_theme_constant_override("separation", 16)
-
 	canvas.add_child(bot_bar)
 
-	
-
 	var p_panel = PanelContainer.new()
-
 	p_panel.custom_minimum_size = Vector2(440, 134)
-
-	p_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.11, 0.12, 0.16, 0.94), Color(0.78, 0.62, 0.28), 2, 6))
-
+	p_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(12))
 	bot_bar.add_child(p_panel)
 
-	
-
 	player_card = RichTextLabel.new()
-
 	player_card.bbcode_enabled = true
-
 	player_card.fit_content = true
-
+	var cur_f = UIHelpers.get_font(false)
+	if cur_f: player_card.add_theme_font_override("normal_font", cur_f)
 	p_panel.add_child(player_card)
 
-	
-
 	var log_panel = PanelContainer.new()
-
 	log_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	log_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.09, 0.10, 0.13, 0.94), Color(0.60, 0.48, 0.22), 2, 6))
-
+	log_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(12))
 	bot_bar.add_child(log_panel)
 
-	
-
 	log_box = RichTextLabel.new()
-
 	log_box.bbcode_enabled = true
-
 	log_box.scroll_following = true
-
+	if cur_f: log_box.add_theme_font_override("normal_font", cur_f)
 	log_panel.add_child(log_box)
 
-	
-
 	# Интерактивная контекстная подсказка
-
 	var hint_panel = PanelContainer.new()
-
 	hint_panel.position = Vector2(340, 516)
-
 	hint_panel.custom_minimum_size = Vector2(600, 38)
-
-	hint_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.12, 0.13, 0.18, 0.92), Color(0.92, 0.78, 0.32), 1, 20))
+	hint_panel.add_theme_stylebox_override("panel", UIHelpers.dark_panel_style(6))
 
 	canvas.add_child(hint_panel)
 
@@ -4714,7 +4339,14 @@ func _build_ui_hud() -> void:
 		_close_all_modals  # on_close
 	)
 
-	_build_citizen_shop_modal(canvas)
+	# Lavka zhitelya vynesena v ui/modals/CitizenShopModal.gd (fasade).
+	citizen_shop_modal = CitizenShopModalScript.new()
+	citizen_shop_modal.build(
+		canvas,
+		_buy_citizen_shop_item,    # on_buy(item_id, price)
+		_on_citizen_shop_item_selected,  # on_select(meta)
+		_close_all_modals           # on_close
+	)
 
 	_build_alchemy_modal(canvas)
 
@@ -5170,7 +4802,7 @@ func _build_event_modal(canvas: CanvasLayer) -> void:
 
 
 func _trigger_random_event(force_id: String = "") -> void:
-
+	if not is_instance_valid(event_panel): return
 	var ev = EventSystem.get_event_by_id(force_id) if force_id != "" else EventSystem.get_random_event()
 
 	_close_all_modals()
@@ -5362,6 +4994,7 @@ func _close_all_modals() -> void:
 	if construction_modal: construction_modal.close()
 	if chest_modal: chest_modal.close()
 	if origin_modal: origin_modal.close()
+	if citizen_shop_modal: citizen_shop_modal.close()
 
 	if party_panel: party_panel.visible = false
 
@@ -6249,7 +5882,8 @@ func _update_projectiles(delta: float) -> void:
 
 
 func _update_enemy_archers(delta: float) -> void:
-
+	if is_in_dungeon or is_overworld_mode:
+		return
 	enemy_archer_timer += delta
 
 	var can_shoot = enemy_archer_timer >= 1.75
@@ -6303,9 +5937,8 @@ func _update_enemy_archers(delta: float) -> void:
 			var shoot_dir = (player_pos - archer_pos).normalized()
 
 			_spawn_projectile(archer_pos + shoot_dir * 14.0, shoot_dir, 460.0, 18.0, false, 320.0, 0.0, npc["name"])
-
 			_spawn_spark_particles(archer_pos + shoot_dir * 14.0, Color.ORANGE)
-
+			_play_sfx("sfx_bow_shot")
 			_log("[color=orange]⚠️ %s натянул тетиву и выстрелил в вас стрелой![/color]" % npc["name"])
 
 
@@ -6919,7 +6552,7 @@ func _on_raid_victory() -> void:
 # =========================================================
 
 func _update_colonists_labor(delta: float) -> void:
-
+	if is_in_dungeon or is_overworld_mode: return
 	var gm = _get_game_manager()
 
 	var p: CharacterData = gm.player_data if gm else null
@@ -7965,276 +7598,47 @@ func _check_settler_migration() -> void:
 		_log("[color=gold][b]🎉 ПОЗДРАВЛЯЕМ! Ваше поселение выросло до нового ранга: %s %s![/b][/color]" % [t_def.get("icon", ""), t_def.get("name", "")])
 
 		_spawn_spark_particles(player_pos, Color.GOLD)
-
-		_spawn_floating_text(player_pos, "👑 РАНГ ГОРОДА: " + t_def.get("name", "").to_upper(), Color.GOLD, 22)
-
-
-
-# =========================================================
-
-# ЛАВКА ЖИТЕЛЯ ПОСЕЛЕНИЯ (CITIZEN TRADE STALL) 🛒
-
-# =========================================================
-
-func _build_citizen_shop_modal(canvas: CanvasLayer) -> void:
-
-	citizen_shop_panel = PanelContainer.new()
-
-	citizen_shop_panel.position = Vector2(260, 80)
-
-	citizen_shop_panel.custom_minimum_size = Vector2(760, 480)
-
-	citizen_shop_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.15, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-
-	citizen_shop_panel.visible = false
-
-	canvas.add_child(citizen_shop_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	citizen_shop_panel.add_child(vbox)
-
-	
-
-	var top_h = HBoxContainer.new()
-
-	top_h.add_theme_constant_override("separation", 12)
-
-	vbox.add_child(top_h)
-
-	
-
-	var title = Label.new()
-
-	title.text = "🛒 ТОРГОВЫЙ ПРИЛАВОК ГОРОЖАНИНА"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	top_h.add_child(title)
-
-	
-
-	var spacer = Control.new()
-
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	top_h.add_child(spacer)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "✖ Закрыть [ ESC ]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	top_h.add_child(close_btn)
-
-	
-
-	var body_h = HBoxContainer.new()
-
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	body_h.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(body_h)
-
-	
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(340, 360)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	body_h.add_child(left_p)
-
-	
-
-	citizen_shop_list = ItemList.new()
-
-	citizen_shop_list.custom_minimum_size = Vector2(320, 340)
-
-	citizen_shop_list.item_selected.connect(_on_citizen_shop_item_selected)
-
-	left_p.add_child(citizen_shop_list)
-
-	
-
-	var right_v = VBoxContainer.new()
-
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	right_v.add_theme_constant_override("separation", 10)
-
-	body_h.add_child(right_v)
-
-	
-
-	var right_p = PanelContainer.new()
-
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	right_v.add_child(right_p)
-
-	
-
-	citizen_shop_info = RichTextLabel.new()
-
-	citizen_shop_info.bbcode_enabled = true
-
-	citizen_shop_info.custom_minimum_size = Vector2(360, 280)
-
-	right_p.add_child(citizen_shop_info)
-
-	
-
-	var buy_btn = Button.new()
-
-	buy_btn.text = "💰 Купить выбранный товар"
-
-	_style_button(buy_btn)
-
-	buy_btn.pressed.connect(func():
-
-		var sel = citizen_shop_list.get_selected_items()
-
-		if sel.size() == 0: return
-
-		var meta = citizen_shop_list.get_item_metadata(sel[0])
-
-		if meta:
-
-			_buy_citizen_shop_item(meta["id"], meta["price"])
-
-	)
-
-	right_v.add_child(buy_btn)
-
+func _build_citizen_shop_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: lavka vynesena v ui/modals/CitizenShopModal.gd.
+	# Sozdanie v _build_ui_hud() cherez citizen_shop_modal.build().
+	pass
 
 
 func _open_citizen_shop(npc_idx: int) -> void:
-
+	if citizen_shop_modal == null:
+		return
 	active_shop_npc_idx = npc_idx
-
 	_close_all_modals()
-
 	is_ui_open = true
-
-	citizen_shop_panel.visible = true
-
+	citizen_shop_modal.open(npc_idx)
 	_refresh_citizen_shop()
 
 
-
 func _refresh_citizen_shop() -> void:
-
-	citizen_shop_list.clear()
-
-	if active_shop_npc_idx < 0 or active_shop_npc_idx >= npc_data.size(): return
-
-	
-
+	if citizen_shop_modal == null:
+		return
+	if active_shop_npc_idx < 0 or active_shop_npc_idx >= npc_data.size():
+		return
 	var npc = npc_data[active_shop_npc_idx]
-
 	var prof = npc.get("role_prof", "")
-
 	if prof == "":
-
 		match npc.get("role", ""):
-
 			"Кузнец": prof = "blacksmith"
-
 			"Хлебопашец": prof = "farmer"
-
 			"Лесоруб", "Лесоруб-Плотник": prof = "woodcutter"
-
 			"Пекарь": prof = "baker"
-
 			"Охотник", "Охотник-Егерь": prof = "hunter"
-
 			"Городской Стражник": prof = "guard"
-
 			_: prof = "farmer"
-
-			
-
 	var shop_items = SettlementDatabase.get_shop_items(prof)
-
-	for it_entry in shop_items:
-
-		var it = ItemDatabase.get_item(it_entry["id"])
-
-		citizen_shop_list.add_item("%s %s — %d з." % [it.get("icon", "📦"), it.get("name", it_entry["id"]), it_entry["price"]])
-
-		citizen_shop_list.set_item_metadata(citizen_shop_list.get_item_count() - 1, it_entry)
-
-		
-
-	citizen_shop_info.text = """[b][font_size=18]Прилавок жителя: %s (%s)[/font_size][/b]
-
-[color=lightgray]Житель продает товары собственного ремесленного производства.[/color]
+	citizen_shop_modal.set_items(shop_items, npc["name"], npc["role"], npc.get("gold", 10))
 
 
-
-[b]Личные сбережения мастера:[/b] [color=gold]%d золотых[/color]
-
-
-
-Выберите предмет из списка слева и нажмите кнопку «Купить».""" % [npc["name"], npc["role"], npc.get("gold", 10)]
+func _on_citizen_shop_item_selected(_idx: int) -> void:
+	# Vybor v spiske teper vnutri CitizenShopModal (item_selected signal).
+	pass
 
 
-
-func _on_citizen_shop_item_selected(idx: int) -> void:
-
-	var meta = citizen_shop_list.get_item_metadata(idx)
-
-	if not meta: return
-
-	var it = ItemDatabase.get_item(meta["id"])
-
-	var npc = npc_data[active_shop_npc_idx] if active_shop_npc_idx >= 0 and active_shop_npc_idx < npc_data.size() else {}
-
-	
-
-	citizen_shop_info.text = """[b][font_size=18]%s %s[/font_size][/b]
-
-[b]Стоимость:[/b] [color=gold]%d золотых[/color]
-
-[b]Категория:[/b] %s
-
-
-
-[color=lightgray]%s[/color]
-
-
-
-[color=cyan]Покупка обогатит жителя %s и пополнит городскую казну налогами в 08:00![/color]
-
-""" % [
-
-		it.get("icon", "📦"), it.get("name", ""),
-
-		meta["price"],
-
-		it.get("category", "предмет").capitalize(),
-
-		it.get("desc", ""),
-
-		npc.get("name", "Мастер")
-
-	]
 
 
 
@@ -9355,7 +8759,7 @@ func _spawn_dog_companion() -> void:
 	add_child(dog_sprite)
 
 func _process_dog_companion(delta: float) -> void:
-	if not dog_sprite: return
+	if not dog_sprite or is_in_dungeon or is_overworld_mode: return
 	
 	dog_thought_timer -= delta
 	dog_bark_cooldown -= delta
@@ -10173,3 +9577,99 @@ func _loot_crypt_boss_chest() -> void:
 		_spawn_floating_text(player_pos, "👑 ЛЕГЕНДАРНЫЙ ЛУТ!", Color.GOLD, 22)
 	else:
 		_log("[color=orange]%s[/color]" % res.get("msg", ""))
+
+
+
+func _update_surface_npcs(delta: float) -> void:
+	for i in npc_data.size():
+		var npc = npc_data[i]
+		if npc.get("is_dead", false):
+			continue
+		var spr = npc_sprites[i]
+		var cur_p = npc_positions[i]
+
+		if npc["role"] in ["Бандит", "Разбойник"]:
+			var d_p = cur_p.distance_to(player_pos)
+			if d_p < 140.0 and d_p > 45.0:
+				var dir = (player_pos - cur_p).normalized()
+				cur_p += dir * 100.0 * delta
+				npc_positions[i] = cur_p
+				spr.position = cur_p
+				npc["thought"] = "⚔️"
+			elif d_p <= 45.0 and attack_cooldown <= 0.0:
+				_bandit_attack_player(i)
+		else:
+			var idle_t: float = npc.get("idle_timer", 0.0) - delta
+			npc["idle_timer"] = idle_t
+			if idle_t <= 0.0:
+				var home: Vector2i = npc.get("home_tile", Vector2i(27, 30))
+				var target_tile = home + Vector2i(randi_range(-3, 3), randi_range(-3, 3))
+				if world_map.can_walk(target_tile):
+					npc["target_pos"] = Vector2(target_tile.x * TILE_SIZE + TILE_SIZE/2.0, target_tile.y * TILE_SIZE + TILE_SIZE/2.0)
+					npc["idle_timer"] = randf_range(4.0, 9.0)
+				else:
+					npc["idle_timer"] = randf_range(1.5, 3.5)
+
+			var target_p: Vector2 = npc.get("target_pos", cur_p)
+			var dist_to_t = cur_p.distance_to(target_p)
+			if dist_to_t > 5.0:
+				var move_dir = (target_p - cur_p).normalized()
+				var spd: float = npc.get("walk_speed", 40.0)
+				var next_p = cur_p + move_dir * spd * delta
+				var next_tile = Vector2i(int(next_p.x / TILE_SIZE), int(next_p.y / TILE_SIZE))
+				if world_map.can_walk(next_tile):
+					cur_p = next_p
+					npc_positions[i] = cur_p
+					spr.position = cur_p
+					var w_time: float = npc.get("anim_t", 0.0) + delta * 9.0
+					npc["anim_t"] = w_time
+					if spr.hframes == 9:
+						var dir_row := 2
+						if abs(move_dir.x) > abs(move_dir.y):
+							dir_row = 3 if move_dir.x > 0 else 1
+						else:
+							dir_row = 2 if move_dir.y > 0 else 0
+						npc["anim_dir_row"] = dir_row
+						var step_col := (int(w_time) % 8) + 1
+						spr.frame = dir_row * 9 + step_col
+						spr.flip_h = false
+						spr.rotation_degrees = 0.0
+						spr.offset.y = 0.0
+					else:
+						spr.offset.y = sin(w_time) * -2.5
+						spr.rotation_degrees = sin(w_time) * 3.5
+						if move_dir.x != 0:
+							spr.flip_h = (move_dir.x < 0)
+				else:
+					npc["target_pos"] = cur_p
+					npc["idle_timer"] = randf_range(2.0, 4.0)
+			else:
+				if spr.hframes == 9:
+					var dir_row: int = npc.get("anim_dir_row", 2)
+					spr.frame = dir_row * 9
+					spr.rotation_degrees = 0.0
+					spr.offset.y = 0.0
+				else:
+					spr.rotation_degrees = lerpf(spr.rotation_degrees, 0.0, delta * 8.0)
+					spr.offset.y = sin(Time.get_ticks_msec() * 0.0025 + i * 1.5) * -1.0
+
+		var plate = spr.get_node_or_null("Nameplate") as Label
+		if plate:
+			plate.visible = (i == interaction_target)
+			if plate.visible:
+				var nick = (" «" + npc["nickname"] + "»") if npc.get("nickname", "") != "" else ""
+				plate.text = "%s%s" % [npc["name"], nick]
+
+	# Мягкое отталкивание живых NPC друг от друга
+	for i in npc_positions.size():
+		if npc_data[i].get("is_dead", false): continue
+		for j in range(i + 1, npc_positions.size()):
+			if npc_data[j].get("is_dead", false): continue
+			var diff = npc_positions[i] - npc_positions[j]
+			var d = diff.length()
+			if d < 28.0 and d > 0.01:
+				var push = diff.normalized() * (28.0 - d) * 3.5 * delta
+				npc_positions[i] += push
+				npc_positions[j] -= push
+				npc_sprites[i].position = npc_positions[i]
+				npc_sprites[j].position = npc_positions[j]
