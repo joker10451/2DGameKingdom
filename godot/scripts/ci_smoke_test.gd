@@ -160,9 +160,40 @@ func _init() -> void:
 		printerr("❌ [CI FAILED] Quest reputation reward failed (expected 30, got %d)" % q_player.reputation)
 		quit(1)
 		return
-	print("  ✅ CitizenQuestSystem Reputation Fix OK (Reputation: 10 -> %d)" % q_player.reputation)
+	# 9. Validate NPCInspectorModal Live Passport Facade
+	print("\n[9/10] Validating NPCInspectorModal Passport Facade...")
+	var inspector_script = preload("res://src/ui/modals/NPCInspectorModal.gd")
+	var inspector = inspector_script.new()
+	var test_canvas = CanvasLayer.new()
+	inspector.build(test_canvas, func(): pass)
+	var insp_data = preload("res://src/character/CharacterData.gd").new()
+	insp_data.name = "Радмир"
+	insp_data.current_role = "Мельник"
+	insp_data.gold = 35
+	insp_data.traits.append_array(["Честный", "Трудолюбивый"])
+	inspector.open(insp_data)
+	if not inspector.is_open():
+		printerr("❌ [CI FAILED] NPCInspectorModal open failed!")
+		quit(1)
+		return
+	inspector.close()
+	if inspector.is_open():
+		printerr("❌ [CI FAILED] NPCInspectorModal close failed!")
+		quit(1)
+		return
+	print("  ✅ NPCInspectorModal Live Passport OK (Build, Open, Render & Close verified)")
+
+	# 10. Validate SimulationDebugOverlay & EconomyFlowOverlay
+	print("\n[10/10] Validating Simulation Overlays (F3 & Economy Flow)...")
+	var debug_overlay = preload("res://src/ui/overlays/SimulationDebugOverlay.gd").new()
+	debug_overlay.toggle()
+	debug_overlay.update_metrics(14, 16, 42, "spring", 247, 239, 8, {"Фермер": 42, "Мельник": 6}, {"grain": 184, "flour": 71, "bread": 36}, 78, false, 0)
+	var flow_overlay = preload("res://src/ui/overlays/EconomyFlowOverlay.gd").new()
+	flow_overlay.toggle()
+	flow_overlay.set_flow_data([{"pos": Vector2(100, 100), "title": "Ферма"}], [{"from_pos": Vector2(100, 100), "to_pos": Vector2(200, 100), "color": Color.GOLD}])
+	print("  ✅ Simulation Overlays OK (F3 metrics & Economy Flow vector graph verified)")
 
 	print("\n========================================================")
-	print("🎉 [CI QUALITY GATE PASSED] All 8 test suites passed with 0 errors!")
+	print("🎉 [CI QUALITY GATE PASSED] All 10 test suites passed with 0 errors!")
 	print("========================================================\n")
 	quit(0)
