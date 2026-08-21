@@ -2,15 +2,17 @@ class_name AgricultureSystem2D
 extends RefCounted
 
 ## МНОГОСТАДИЙНАЯ СИСТЕМА ЗЕМЛЕДЕЛИЯ И ИРРИГАЦИИ
-## Управляет 4 стадиями роста культур, поливом лейкой и сбором урожая
+## Синхронизирована с игровым временем TimeManager и погодными условиями
 
-# crop_data: Vector2i -> {crop_type: "wheat", stage: 0..3, is_watered: bool, growth_progress: float}
+# crop_data: Vector2i -> {crop_type: "wheat", stage: 0..3, is_watered: bool, hours_grown: float}
 var crops: Dictionary = {}
 
 const STAGE_SEEDS := 0
 const STAGE_SPROUT := 1
 const STAGE_GROWING := 2
 const STAGE_MATURE := 3
+
+const HOURS_PER_STAGE := 6.0 # 6 игровых часов на стадию (24ч на полный урожай)
 
 func plant_crop(pos: Vector2i, crop_type: String = "wheat") -> bool:
 	if crops.has(pos):
@@ -19,7 +21,7 @@ func plant_crop(pos: Vector2i, crop_type: String = "wheat") -> bool:
 		"crop_type": crop_type,
 		"stage": STAGE_SEEDS,
 		"is_watered": false,
-		"growth_progress": 0.0
+		"hours_grown": 0.0
 	}
 	return true
 
@@ -29,24 +31,38 @@ func water_tile(pos: Vector2i) -> bool:
 		return true
 	return false
 
-func process_growth(delta_time: float) -> Array[Vector2i]:
+func on_hour_passed(hour: int, current_weather: String = "clear") -> Array[Vector2i]:
 	var updated_tiles: Array[Vector2i] = []
+	var is_raining = (current_weather in ["rain", "storm", "rainy"])
+	var is_dawn = (hour == 6)
 	
 	for pos in crops.keys():
 		var c = crops[pos]
+		
+		# Автополив во время дождя
+		if is_raining:
+			c["is_watered"] = true
+		elif is_dawn:
+			# На рассвете почва высыхает
+			c["is_watered"] = false
+			
 		if c["stage"] >= STAGE_MATURE:
 			continue
 			
-		# Политые культуры растут в 2.5 раза быстрее
-		var speed_mult = 2.5 if c["is_watered"] else 1.0
-		c["growth_progress"] += delta_time * 0.15 * speed_mult
+		# Политые культуры растут быстрее
+		var growth_rate = 1.5 if c["is_watered"] else 0.75
+		c["hours_grown"] += growth_rate
 		
-		var new_stage = int(c["growth_progress"])
+		var new_stage = int(c["hours_grown"] / HOURS_PER_STAGE)
 		if new_stage > c["stage"]:
 			c["stage"] = min(new_stage, STAGE_MATURE)
 			updated_tiles.append(pos)
 			
 	return updated_tiles
+
+func process_growth(_delta_time: float) -> Array[Vector2i]:
+	# Legacy frame delta handler: no-op to prevent FPS-based growth exploit
+	return []
 
 func harvest_crop(pos: Vector2i, player_data: CharacterData) -> Dictionary:
 	if not crops.has(pos):
