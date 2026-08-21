@@ -104,6 +104,7 @@ const OriginModalScript = preload("res://src/ui/modals/OriginModal.gd")
 const CitizenShopModalScript = preload("res://src/ui/modals/CitizenShopModal.gd")
 const AlchemyModalScript = preload("res://src/ui/modals/AlchemyModal.gd")
 const StableModalScript = preload("res://src/ui/modals/StableModal.gd")
+const ShipyardModalScript = preload("res://src/ui/modals/ShipyardModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -386,6 +387,7 @@ var citizen_shop_modal: RefCounted
 
 var alchemy_modal: RefCounted
 var stable_modal: RefCounted
+var shipyard_modal: RefCounted
 
 
 
@@ -605,7 +607,6 @@ var tourney_round: int = 0
 var tourney_enemy_idx: int = -1
 
 # Морская верфь, корабли и экспедиции на острова
-var shipyard_panel: PanelContainer
 
 # Атмосфера, погода, дым из труб и вечерние окна 🕯️🌧️💨
 var current_weather: String = "clear"
@@ -635,9 +636,6 @@ var dog_panel: PanelContainer
 var dog_dialogue_text: RichTextLabel
 var dog_bark_cooldown: float = 0.0
 var dog_thought_timer: float = 0.0
-var shipyard_list: ItemList
-var shipyard_info: RichTextLabel
-var selected_ship_type: String = "ship_longboat"
 var is_island_expedition_active: bool = false
 var active_island_id: String = ""
 var island_enemies: Array[int] = []
@@ -4374,6 +4372,21 @@ func _build_ui_hud() -> void:
 		_close_all_modals,       # on_close
 	)
 
+	# Morskaya verf vynesena v ui/modals/ShipyardModal.gd (fasade).
+	shipyard_modal = ShipyardModalScript.new()
+	shipyard_modal.build(
+		canvas,
+		_log,                    # on_log(text)
+		_spawn_floating_text,    # on_floating_text(pos, text, color, size)
+		_spawn_spark_particles,  # on_spark(pos, color)
+		_get_game_manager,       # get_manager()
+		_get_player_pos,         # get_player_pos()
+		_buy_selected_ship,      # on_build(ship_type_id)
+		_sail_sea_fishing,       # on_fish()
+		_close_all_modals        # on_close
+	)
+
+
 
 func _build_dialogue_modal(canvas: CanvasLayer) -> void:
 
@@ -5041,7 +5054,7 @@ func _close_all_modals() -> void:
 
 	if alchemy_panel: alchemy_panel.visible = false
 	if stable_modal: stable_modal.close()
-	if shipyard_panel: shipyard_panel.visible = false
+	if shipyard_modal: shipyard_modal.close()
 	if dog_panel: dog_panel.visible = false
 	if bard_panel: bard_panel.visible = false
 
@@ -8190,138 +8203,40 @@ func _on_tournament_victory() -> void:
 # =========================================================
 # МОРСКАЯ ВЕРФЬ, СУДОСТРОЕНИЕ И ЭКСПЕДИЦИИ НА ОСТРОВА ⛵🌴🗿
 # =========================================================
-func _build_shipyard_modal(canvas: CanvasLayer) -> void:
-	shipyard_panel = PanelContainer.new()
-	shipyard_panel.position = Vector2(250, 75)
-	shipyard_panel.custom_minimum_size = Vector2(780, 500)
-	shipyard_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.16, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-	shipyard_panel.visible = false
-	canvas.add_child(shipyard_panel)
-	
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	shipyard_panel.add_child(vbox)
-	
-	var top_h = HBoxContainer.new()
-	top_h.add_theme_constant_override("separation", 12)
-	vbox.add_child(top_h)
-	
-	var title = Label.new()
-	title.text = "⛵ МОРСКАЯ ВЕРФЬ И СУДОСТРОЕНИЕ"
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	top_h.add_child(title)
-	
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_h.add_child(spacer)
-	
-	var close_btn = Button.new()
-	close_btn.text = "✖ Закрыть [ ESC ]"
-	_style_button(close_btn)
-	close_btn.pressed.connect(_close_all_modals)
-	top_h.add_child(close_btn)
-	
-	var body_h = HBoxContainer.new()
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body_h.add_theme_constant_override("separation", 16)
-	vbox.add_child(body_h)
-	
-	var left_p = PanelContainer.new()
-	left_p.custom_minimum_size = Vector2(340, 380)
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	body_h.add_child(left_p)
-	
-	shipyard_list = ItemList.new()
-	shipyard_list.custom_minimum_size = Vector2(320, 360)
-	shipyard_list.item_selected.connect(_on_shipyard_item_selected)
-	left_p.add_child(shipyard_list)
-	
-	var right_v = VBoxContainer.new()
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_v.add_theme_constant_override("separation", 10)
-	body_h.add_child(right_v)
-	
-	var right_p = PanelContainer.new()
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	right_v.add_child(right_p)
-	
-	shipyard_info = RichTextLabel.new()
-	shipyard_info.bbcode_enabled = true
-	shipyard_info.custom_minimum_size = Vector2(380, 300)
-	right_p.add_child(shipyard_info)
-	
-	var act_h = HBoxContainer.new()
-	act_h.add_theme_constant_override("separation", 12)
-	right_v.add_child(act_h)
-	
-	var build_btn = Button.new()
-	build_btn.text = "🔨 Построить Судно"
-	_style_button(build_btn)
-	build_btn.pressed.connect(_buy_selected_ship)
-	act_h.add_child(build_btn)
-	
-	var fish_btn = Button.new()
-	fish_btn.text = "🐟 Морской Промысел"
-	_style_button(fish_btn)
-	fish_btn.pressed.connect(_sail_sea_fishing)
-	act_h.add_child(fish_btn)
+# МОРСКАЯ ВЕРФЬ (UI вынесено в ShipyardModal.gd)
+# =========================================================
+
+func _build_shipyard_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI вынесено в ui/modals/ShipyardModal.gd.
+	# Создание в _build_ui_hud() через shipyard_modal.build().
+	pass
+
 
 func _open_shipyard_modal() -> void:
+	if shipyard_modal == null:
+		return
 	_close_all_modals()
 	is_ui_open = true
-	shipyard_panel.visible = true
-	selected_ship_type = "ship_longboat"
-	_refresh_shipyard_modal()
+	shipyard_modal.open()
+
 
 func _refresh_shipyard_modal() -> void:
-	shipyard_list.clear()
-	for s_id in NavalSystem.SHIPS.keys():
-		var s = NavalSystem.SHIPS[s_id]
-		shipyard_list.add_item("%s %s — %d з. (%d др.)" % [s.get("icon", "⛵"), s.get("name", ""), s.get("cost", 60), s.get("wood_cost", 8)])
-		shipyard_list.set_item_metadata(shipyard_list.get_item_count() - 1, s_id)
-		
-	var gm = _get_game_manager()
-	var p: CharacterData = gm.player_data if gm else null
-	NavalSystem.ensure_naval_data(p)
-	
-	var s = NavalSystem.SHIPS.get(selected_ship_type, NavalSystem.SHIPS["ship_longboat"])
-	var active_s = p.settlement.get("active_ship", "") if p else ""
-	var has_ship = (active_s != "")
-	
-	shipyard_info.text = """[b][font_size=18]%s %s[/font_size][/b]
-[b]Стоимость верфи:[/b] [color=gold]%d золотых[/color]
-[b]Необходимые материалы:[/b] %d бревен дерева
+	if shipyard_modal == null:
+		return
+	shipyard_modal.refresh()
 
-[color=lightgray]%s[/color]
 
----------------------------------------------------------
-[b]Флагман поселения в гавани:[/b] %s
+func _on_shipyard_item_selected(_idx: int) -> void:
+	# выбор обрабатывается внутри ShipyardModal (on_list_selected).
+	pass
 
-[color=lightblue]💡 Возможности флота:[/color]
- • Рыбалка в открытом море (Лосось, Тунец, Жемчуг 🦪)
- • Плавание на Забытые Острова за пиратскими сокровищами через карту мира [M]!
-""" % [
-		s.get("icon", "⛵"), s.get("name", ""),
-		s.get("cost", 60),
-		s.get("wood_cost", 8),
-		s.get("desc", ""),
-		(active_s if has_ship else "Нет корабля в гавани")
-	]
-
-func _on_shipyard_item_selected(idx: int) -> void:
-	var s_id = shipyard_list.get_item_metadata(idx)
-	if s_id:
-		selected_ship_type = s_id
-		_refresh_shipyard_modal()
 
 func _buy_selected_ship() -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
-	var res = NavalSystem.build_ship(p, selected_ship_type)
+	var t = shipyard_modal.get_selected_type() if (shipyard_modal != null and shipyard_modal.has_method("get_selected_type")) else "ship_longboat"
+	var res = NavalSystem.build_ship(p, t)
 	if res.get("success", false):
 		_log("[color=gold][b]⛵ СУДОСТРОЕНИЕ: Со стапелей верфи спущен новый корабль: %s %s![/b][/color]" % [res.get("icon", "⛵"), res.get("name", "")])
 		_spawn_spark_particles(player_pos, Color.CYAN)
@@ -8330,11 +8245,11 @@ func _buy_selected_ship() -> void:
 	else:
 		_log("[color=red]⚠️ %s[/color]" % res.get("reason", "Ошибка постройки судна"))
 
+
 func _sail_sea_fishing() -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
 	var res = NavalSystem.go_sea_fishing(p)
 	if res.get("success", false):
 		_log("[color=lightblue]🌊 [b]МОРСКОЙ ПРОМЫСЕЛ:[/b] Ваш корабль вернулся из открытого моря с богатым уловом: %s %s x%d![/color]" % [res.get("icon", "🐟"), res.get("name", ""), res.get("count", 1)])
