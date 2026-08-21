@@ -7085,17 +7085,13 @@ func _open_caravan_modal() -> void:
 func _dispatch_trade_caravan(dest_city_id: String, goods_type: String, goods_amount: int, escort_cost: int, escort_risk: float, escort_name: String) -> void:
 	var gm = _get_game_manager()
 	var p = gm.player_data if gm else null
-	if not p: return
+	if not p or not trade_caravan_system: return
 
-	# Проверка и списание товаров со склада
-	if settlement_stockpile_system and settlement_stockpile_system.stockpiles.has(goods_type):
-		var cur_amt = settlement_stockpile_system.stockpiles[goods_type]
-		if cur_amt < goods_amount:
-			_log("[color=salmon]⚠️ На складе поселения недостаточно товара %s для отправки обоза (требуется %d шт., есть %d шт.)![/color]" % [goods_type, goods_amount, cur_amt])
-			return
-		settlement_stockpile_system.stockpiles[goods_type] = max(0, cur_amt - goods_amount)
+	var res = trade_caravan_system.dispatch_active_caravan(dest_city_id, goods_type, goods_amount, escort_cost, escort_risk, escort_name, p, regional_map_system, settlement_stockpile_system)
+	if not res.get("success", true):
+		_log("[color=salmon]%s[/color]" % res.get("msg", "Ошибка отправки каравана"))
+		return
 
-	var res = trade_caravan_system.dispatch_active_caravan(dest_city_id, goods_type, goods_amount, escort_cost, escort_risk, escort_name, p, regional_map_system)
 	_log("[color=gold]%s[/color]" % res.get("msg", ""))
 	_spawn_spark_particles(player_pos, Color.GOLD)
 	_spawn_floating_text(player_pos, "🐫 КАРАВАН ОТПРАВЛЕН В ПУТЬ!", Color.GOLD, 18)

@@ -22,16 +22,30 @@ const CITY_COORDS := {
 	"highkeep": Vector2i(64, 64)
 }
 
-func dispatch_active_caravan(dest_city_id: String, goods_type: String, goods_amount: int, escort_cost: int, escort_risk: float, escort_name: String, player_data: CharacterData, regional_map: RefCounted) -> Dictionary:
+func dispatch_active_caravan(dest_city_id: String, goods_type: String, goods_amount: int, escort_cost: int, escort_risk: float, escort_name: String, player_data: CharacterData, regional_map: RefCounted, stockpile_system: RefCounted = null) -> Dictionary:
+	# Инвариант: проверка наличия золота на охрану
+	if player_data and escort_cost > 0:
+		if player_data.gold < escort_cost:
+			return {"success": false, "msg": "⚠️ Недостаточно золота для найма охраны (%d з.)!" % escort_cost}
+
+	# Инвариант: проверка и списание груза со склада
+	if stockpile_system and stockpile_system.get("stockpiles") != null:
+		var stocks = stockpile_system.stockpiles
+		if stocks.has(goods_type):
+			var cur_amt = stocks[goods_type]
+			if cur_amt < goods_amount:
+				return {"success": false, "msg": "⚠️ На складе недостаточно %s (есть %d, нужно %d)!" % [goods_type, cur_amt, goods_amount]}
+			stocks[goods_type] = max(0, cur_amt - goods_amount)
+
+	# Списание стоимости найма охраны
+	if player_data and escort_cost > 0:
+		player_data.gold = max(0, player_data.gold - escort_cost)
+
 	var city_name = "Соседний полис"
 	if regional_map and regional_map.has_method("get_city"):
 		var c = regional_map.get_city(dest_city_id)
 		if not c.is_empty():
 			city_name = c.get("name", city_name)
-
-	# Списание стоимости найма охраны
-	if player_data and escort_cost > 0:
-		player_data.gold = max(0, player_data.gold - escort_cost)
 
 	var start_coord = CITY_COORDS.get("olderia", Vector2i(54, 70))
 	var end_coord = CITY_COORDS.get(dest_city_id, Vector2i(64, 64))

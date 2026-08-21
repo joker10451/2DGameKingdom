@@ -12,9 +12,9 @@
 
 import net from "node:net";
 
-const BRIDGE_HOST = "127.0.0.1";
-const BRIDGE_PORT = 55139;
-const SESSION_TOKEN = ""; // bridge has SESSION_TOKEN_BAKED="" => fail-open (no auth)
+const BRIDGE_HOST = process.env.GODOT_MCP_HOST || "127.0.0.1";
+const BRIDGE_PORT = parseInt(process.env.GODOT_MCP_PORT || "55139", 10);
+const SESSION_TOKEN = process.env.MCP_SESSION_TOKEN || "";
 
 // ---- TCP bridge client -----------------------------------------------------
 

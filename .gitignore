@@ -1,20 +1,33 @@
 # === Godot 4 engine cache ===
 .godot/
 /android/
-# Imported artifacts (kept out of VCS; regenerated on import)
-.godot/
+
+# === OS generated files ===
+desktop.ini
+Thumbs.db
+.DS_Store
+*.tmp
+
+# === IDE & Editors ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
 
 # === MCP agent runtime artifacts ===
-# Исключаем содержимое .mcp/, но оставляем сервер (иначе git не даст re-include)
 .mcp/*
 !.mcp/scripts/
+godot/.mcp/*
+!godot/.mcp/scripts/
 
 # === Python ===
 __pycache__/
 *.pyc
 *.pyo
 
-# === Large archives / backups (not source) ===
+# === Large archives / backups ===
 *.zip
 *.7z
 *.rar
@@ -23,4 +36,3 @@ __pycache__/
 preview_*.png
 hero_*.png
 hero_test_render.png
-
