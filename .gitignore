@@ -5,7 +5,9 @@
 .godot/
 
 # === MCP agent runtime artifacts ===
-.mcp/
+# Исключаем содержимое .mcp/, но оставляем сервер (иначе git не даст re-include)
+.mcp/*
+!.mcp/scripts/
 
 # === Python ===
 __pycache__/
