@@ -120,6 +120,13 @@ const PROFESSIONS := {
 		"yield_desc": "Выращивает пшеницу и поставляет зерно на мельницу.",
 		"daily_income": 6
 	},
+	"miller": {
+		"id": "miller",
+		"name": "Мельник",
+		"icon": "💨",
+		"yield_desc": "Перемалывает зерно на мельнице в муку для пекарни.",
+		"daily_income": 7
+	},
 	"woodcutter": {
 		"id": "woodcutter",
 		"name": "Лесоруб-Плотник",

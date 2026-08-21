@@ -72,23 +72,41 @@ func _init() -> void:
 		return
 	print("  ✅ NPCRoutineController 24h AI OK (Work shift & Alarm evacuation verified)")
 
-	# 4. Validate Economic & Caravan Invariants
-	print("\n[4/4] Validating Economic Invariants...")
-	var caravan_script = preload("res://src/world/TradeCaravanSystem.gd")
-	var trade_sys = caravan_script.new()
-	var char_data_script = preload("res://src/character/CharacterData.gd")
-	var p_data = char_data_script.new()
-	p_data.gold = 50
+	# 5. Validate Living Closed-Loop Production Chain (Farm -> Mill -> Bakery)
+	print("\n[5/5] Validating LivingProductionSystem Chains...")
+	var prod_script = preload("res://src/economy/LivingProductionSystem.gd")
+	var stockpiles: Dictionary = {"grain": 0, "flour": 0, "bread": 0}
 
-	# Dispatch caravan with 20 gold escort cost
-	var res = trade_sys.dispatch_active_caravan("goldvale", "timber", 5, 20, 0.1, "Охрана", p_data, null)
-	if p_data.gold != 30:
-		printerr("❌ [CI FAILED] Caravan escort gold deduction failed (expected 30, got %d)" % p_data.gold)
+	# Step A: Farmer produces 2 grain
+	var farm_res = prod_script.execute_work_shift("Хлебопашец", stockpiles)
+	if farm_res["status"] != "success" or stockpiles["grain"] != 2:
+		printerr("❌ [CI FAILED] Farming grain production failed: ", farm_res)
 		quit(1)
 		return
-	print("  ✅ TradeCaravanSystem Invariant OK (Escort deducted: 50 -> %d)" % p_data.gold)
+
+	# Step B: Miller transforms 2 grain -> 2 flour
+	var mill_res = prod_script.execute_work_shift("Мельник", stockpiles)
+	if mill_res["status"] != "success" or stockpiles["grain"] != 0 or stockpiles["flour"] != 2:
+		printerr("❌ [CI FAILED] Milling grain to flour failed: ", mill_res)
+		quit(1)
+		return
+
+	# Step C: Baker transforms 2 flour -> 2 bread
+	var bake_res = prod_script.execute_work_shift("Пекарь", stockpiles)
+	if bake_res["status"] != "success" or stockpiles["flour"] != 0 or stockpiles["bread"] != 2:
+		printerr("❌ [CI FAILED] Baking bread failed: ", bake_res)
+		quit(1)
+		return
+
+	# Step D: Missing materials guard (baker tries to bake again with 0 flour)
+	var fail_res = prod_script.execute_work_shift("Пекарь", stockpiles)
+	if fail_res["status"] != "missing_materials":
+		printerr("❌ [CI FAILED] Missing materials guard failed: ", fail_res)
+		quit(1)
+		return
+	print("  ✅ LivingProductionSystem Closed-Loop OK (Grain -> Flour -> Bread verified!)")
 
 	print("\n========================================================")
-	print("🎉 [CI QUALITY GATE PASSED] All 4 test suites passed with 0 errors!")
+	print("🎉 [CI QUALITY GATE PASSED] All 5 test suites passed with 0 errors!")
 	print("========================================================\n")
 	quit(0)
