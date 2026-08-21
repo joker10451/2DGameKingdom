@@ -6,46 +6,79 @@ extends Node
 # Базовые цены товаров
 var base_prices: Dictionary = {
 	"grain": 2.0,
+	"wheat": 2.0,
 	"bread": 4.0,
+	"flour": 4.0,
 	"meat": 7.0,
 	"ale": 5.0,
 	"wood": 3.0,
+	"plank": 4.0,
 	"iron_ore": 6.0,
+	"iron_ingot": 22.0,
 	"tools": 15.0,
-	"sword": 35.0,
+	"sword_1h": 35.0,
+	"dagger_iron": 20.0,
+	"shield_badge": 35.0,
+	"shield_wood": 20.0,
+	"bow": 35.0,
+	"arrows": 2.0,
+	"leather": 16.0,
+	"wolf_pelt": 24.0,
 	"armor": 80.0
 }
 
 # Текущий запас на рынке (Supply)
 var inventory: Dictionary = {
 	"grain": 100,
+	"wheat": 60,
 	"bread": 40,
+	"flour": 30,
 	"meat": 20,
 	"ale": 30,
 	"wood": 80,
+	"plank": 40,
 	"iron_ore": 30,
+	"iron_ingot": 15,
 	"tools": 15,
-	"sword": 5,
+	"sword_1h": 5,
+	"dagger_iron": 8,
+	"shield_badge": 6,
+	"shield_wood": 10,
+	"bow": 6,
+	"arrows": 60,
+	"leather": 20,
+	"wolf_pelt": 12,
 	"armor": 2
 }
 
 # Спрос (Demand) - целевой желаемый объем запасов
 var target_demand: Dictionary = {
 	"grain": 100,
+	"wheat": 60,
 	"bread": 50,
+	"flour": 30,
 	"meat": 25,
 	"ale": 35,
 	"wood": 60,
+	"plank": 40,
 	"iron_ore": 25,
+	"iron_ingot": 15,
 	"tools": 10,
-	"sword": 5,
+	"sword_1h": 5,
+	"dagger_iron": 8,
+	"shield_badge": 6,
+	"shield_wood": 10,
+	"bow": 6,
+	"arrows": 60,
+	"leather": 20,
+	"wolf_pelt": 12,
 	"armor": 2
 }
 
 func get_current_price(item_id: String) -> float:
-	var base = base_prices.get(item_id, 1.0)
-	var supply = float(inventory.get(item_id, 1))
-	var demand = float(target_demand.get(item_id, 1))
+	var base = base_prices.get(item_id, float(ItemDatabase.get_item(item_id).get("value", 5)))
+	var supply = float(inventory.get(item_id, 10))
+	var demand = float(target_demand.get(item_id, 10))
 	
 	# Формула ценообразования: при дефиците цена растет, при избытке падает
 	var ratio = demand / maxf(1.0, supply)

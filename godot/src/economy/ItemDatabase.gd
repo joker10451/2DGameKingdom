@@ -507,18 +507,202 @@ const ITEMS := {
 	"ring_undying": {
 		"name": "Кольцо Бессмертия 💍",
 		"icon": "💍",
-		"category": "accessory",
+		"category": "valuable",
 		"desc": "Древнее кольцо с сапфиром душ. Дарует +30 к максимальному здоровью и постоянную регенерацию.",
 		"value": 220,
 		"max_hp_bonus": 30
+	},
+	"wheat": {
+		"name": "Спелая Пшеница",
+		"icon": "🌾",
+		"category": "resource",
+		"desc": "Спелые золотые колосья пшеницы. Мелются в муку на мельнице.",
+		"value": 2
+	},
+	"seeds_wheat": {
+		"name": "Пшеничные Семена",
+		"icon": "🌱",
+		"category": "resource",
+		"desc": "Отборные семена для посева на вспаханной грядке [B].",
+		"value": 1
+	},
+	"shield_wood": {
+		"name": "Деревянный Щит",
+		"icon": "🛡️",
+		"category": "shield",
+		"desc": "Простой щит из сосновых досок. Защита: +20%.",
+		"value": 20,
+		"hand": "left"
+	},
+	"dagger_iron": {
+		"name": "Железный Кинжал",
+		"icon": "🗡️",
+		"category": "weapon",
+		"desc": "Удобный кинжал оруженосца. Урон: 16-24.",
+		"value": 22,
+		"hand": "right",
+		"damage": 20
+	},
+	"sword_iron": {
+		"name": "Железный Меч",
+		"icon": "⚔️",
+		"category": "weapon",
+		"desc": "Надежный кованый меч стражи. Урон: 24-32.",
+		"value": 30,
+		"hand": "right",
+		"damage": 28
+	},
+	"bow_hunting": {
+		"name": "Охотничий Лук",
+		"icon": "🏹",
+		"category": "weapon",
+		"desc": "Гибкий лук для охоты на дичь. Урон: 22-30.",
+		"value": 45,
+		"hand": "right",
+		"damage": 25
+	},
+	"arrow": {
+		"name": "Оперенная Стрела",
+		"icon": "🎯",
+		"category": "ammo",
+		"desc": "Острая стрела с железным наконечником.",
+		"value": 2
+	},
+	"meat_roasted": {
+		"name": "Жареное Мясо",
+		"icon": "🍗",
+		"category": "food",
+		"desc": "Ароматный кусок мяса со специями. Восстанавливает 55 HP.",
+		"value": 16,
+		"heal_hp": 55.0,
+		"restore_stamina": 35.0
+	},
+	"fish": {
+		"name": "Речная Рыба",
+		"icon": "🐟",
+		"category": "food",
+		"desc": "Свежая речная рыба. Можно приготовить Царскую Уху на костре.",
+		"value": 6,
+		"heal_hp": 15.0,
+		"restore_stamina": 10.0
+	},
+	"gem_ruby": {
+		"name": "Алый Рубин",
+		"icon": "💎",
+		"category": "valuable",
+		"desc": "Драгоценный сверкающий камень из древней сокровищницы.",
+		"value": 75
+	},
+	"gem_sapphire": {
+		"name": "Синий Сапфир",
+		"icon": "💎",
+		"category": "valuable",
+		"desc": "Редкий ограненный сапфир чистейшей воды.",
+		"value": 90
+	},
+	"gem_emerald": {
+		"name": "Изумруд",
+		"icon": "💎",
+		"category": "valuable",
+		"desc": "Яркий зеленый самоцвет лесных недр.",
+		"value": 85
+	},
+	"coal": {
+		"name": "Древесный Уголь",
+		"icon": "🪨",
+		"category": "resource",
+		"desc": "Жаркий уголь для кузнечного горна.",
+		"value": 3
+	},
+	"gold_ore": {
+		"name": "Золотая Руда",
+		"icon": "🪨",
+		"category": "resource",
+		"desc": "Самородки золота из глубоких горных жил.",
+		"value": 25
+	},
+	"gold_ingot": {
+		"name": "Золотой Слиток",
+		"icon": "🧱",
+		"category": "resource",
+		"desc": "Чистый золотой слиток высокой пробы.",
+		"value": 75
+	},
+	"apple": {
+		"name": "Лесное Яблоко",
+		"icon": "🍎",
+		"category": "food",
+		"desc": "Сочное спелое яблоко. Восстанавливает 10 HP и утоляет жажду.",
+		"value": 2,
+		"heal_hp": 10.0,
+		"restore_stamina": 15.0
+	},
+	"mushroom": {
+		"name": "Лесной Гриб",
+		"icon": "🍄",
+		"category": "food",
+		"desc": "Съедобный боровик из дубовой рощи.",
+		"value": 3,
+		"heal_hp": 8.0,
+		"restore_stamina": 10.0
+	},
+	"water_flask": {
+		"name": "Фляга с Водой",
+		"icon": "🍶",
+		"category": "food",
+		"desc": "Холодная родниковая вода. Восстанавливает выносливость.",
+		"value": 4,
+		"restore_stamina": 35.0
+	},
+	"tools": {
+		"name": "Набор Инструментов",
+		"icon": "🧰",
+		"category": "tool",
+		"desc": "Железные инструменты для ремесла и ремонта построек.",
+		"value": 15
+	},
+	"sword": {
+		"name": "Стальной Меч",
+		"icon": "🗡️",
+		"category": "weapon",
+		"desc": "Острый клинок из болотной стали. Урон: 25-35.",
+		"value": 35,
+		"hand": "right",
+		"damage": 30
+	},
+	"armor": {
+		"name": "Кованый Доспех",
+		"icon": "🛡️",
+		"category": "armor",
+		"desc": "Прочные железные латы для защиты в бою.",
+		"value": 80,
+		"defense": 12
 	}
 }
 
+static func get_category_name(cat: String) -> String:
+	match cat:
+		"weapon": return "Оружие"
+		"shield": return "Щит"
+		"armor": return "Доспех"
+		"food": return "Еда и Напитки"
+		"potion": return "Зелье / Алхимия"
+		"resource", "material": return "Ресурс / Материал"
+		"ammo": return "Боеприпасы"
+		"tool": return "Инструмент"
+		"structure": return "Строение"
+		"valuable": return "Драгоценность"
+		"medicine": return "Медицина"
+		"misc": return "Разное"
+		_: return "Разное"
+
 static func get_item(id: String) -> Dictionary:
-	return ITEMS.get(id, {
+	if ITEMS.has(id):
+		return ITEMS[id].duplicate(true)
+	return {
 		"name": id.capitalize(),
 		"icon": "📦",
 		"category": "misc",
-		"desc": "Обычный предмет.",
+		"desc": "Обычный предмет мира Олдерии.",
 		"value": 1
-	})
+	}

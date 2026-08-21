@@ -119,23 +119,20 @@ func set_items(entries: Array, npc_name: String, npc_role: String, npc_gold: int
 func show_detail(meta: Dictionary) -> void:
 	_selected_meta = meta
 	var it = ItemDatabase.get_item(meta["id"])
+	var cat_name = ItemDatabase.get_category_name(it.get("category", "misc"))
 	_info.text = """[b][font_size=18]%s %s[/font_size][/b]
 
 [b]Стоимость:[/b] [color=gold]%d золотых[/color]
 
 [b]Категория:[/b] %s
 
-
-
 [color=lightgray]%s[/color]
-
-
 
 [color=cyan]Покупка обогатит жителя %s и пополнит городскую казну налогами в 08:00![/color]
 """ % [
 		it.get("icon", "📦"), it.get("name", ""),
 		meta["price"],
-		it.get("category", "предмет").capitalize(),
+		cat_name,
 		it.get("desc", ""),
 		_npc_name
 	]

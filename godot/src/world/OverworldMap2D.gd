@@ -11,6 +11,7 @@ const TILE_SIZE: int = 36
 var overworld_tiles: Dictionary = {} # Vector2i -> String
 var locations: Dictionary = {}       # Vector2i -> Dictionary
 var player_tile: Vector2i = Vector2i(54, 70)
+var caravan_system_ref: RefCounted = null
 
 const LOCATIONS_DEF := {
 	Vector2i(54, 70): {
@@ -180,6 +181,26 @@ func can_travel(pos: Vector2i) -> bool:
 	var t = overworld_tiles[pos]
 	return t != "water" and t != "mountain"
 
+var _ow_tex_cache: Dictionary = {}
+
+func _get_ow_tex(name: String) -> Texture2D:
+	if _ow_tex_cache.has(name):
+		return _ow_tex_cache[name]
+	var path = "res://assets/sprites/overworld/%s.png" % name
+	var abs_p = ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(abs_p):
+		var img = Image.load_from_file(abs_p)
+		if img and not img.is_empty():
+			var itex = ImageTexture.create_from_image(img)
+			_ow_tex_cache[name] = itex
+			return itex
+	if ResourceLoader.exists(path):
+		var tex = load(path) as Texture2D
+		if tex:
+			_ow_tex_cache[name] = tex
+			return tex
+	return null
+
 func get_travel_speed_mult(pos: Vector2i) -> float:
 	var t = overworld_tiles.get(pos, "grass")
 	match t:
@@ -197,68 +218,98 @@ func set_player_tile(p_tile: Vector2i) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	# Рисуем карту мира с четкой средневековой палитрой
+	# 1. Текстурированные биомы средневековой карты
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var pos = Vector2i(x, y)
 			var w_pos = Vector2(x * TILE_SIZE, y * TILE_SIZE)
 			var t_type = overworld_tiles.get(pos, "grass")
 			
-			var col: Color
-			match t_type:
-				"water": col = Color(0.20, 0.45, 0.75) # Яркая чистая вода
-				"mountain": col = Color(0.48, 0.48, 0.52) # Каменные вершины
-				"forest": col = Color(0.22, 0.48, 0.25) # Сочные дубравы
-				"swamp": col = Color(0.35, 0.45, 0.28) # Мшистые топи
-				"road": col = Color(0.85, 0.76, 0.58) # Светлый мощеный тракт
-				_: col = Color(0.48, 0.72, 0.38) # Изумрудные луга
-				
-			draw_rect(Rect2(w_pos, Vector2(TILE_SIZE, TILE_SIZE)), col)
-			
-			# Контуры дорог
-			if t_type == "road":
-				draw_rect(Rect2(w_pos + Vector2(2, 2), Vector2(TILE_SIZE - 4, TILE_SIZE - 4)), Color(0.92, 0.84, 0.65))
-			elif t_type == "forest":
-				# Миниатюрные деревья в чащах
-				draw_circle(w_pos + Vector2(TILE_SIZE/2.0, TILE_SIZE/2.0), 5.0, Color(0.14, 0.32, 0.16))
-			elif t_type == "mountain":
-				# Горные пики
-				var pts = PackedVector2Array([
-					w_pos + Vector2(TILE_SIZE/2.0, 4),
-					w_pos + Vector2(4, TILE_SIZE - 4),
-					w_pos + Vector2(TILE_SIZE - 4, TILE_SIZE - 4)
-				])
-				draw_colored_polygon(pts, Color(0.62, 0.62, 0.66))
+			var tex_name = "ow_" + t_type
+			var t_tex = _get_ow_tex(tex_name)
+			if t_tex:
+				draw_texture_rect(t_tex, Rect2(w_pos, Vector2(TILE_SIZE, TILE_SIZE)), false)
+			else:
+				var col = Color(0.48, 0.72, 0.38)
+				if t_type == "water": col = Color(0.20, 0.45, 0.75)
+				elif t_type == "mountain": col = Color(0.48, 0.48, 0.52)
+				draw_rect(Rect2(w_pos, Vector2(TILE_SIZE, TILE_SIZE)), col)
 	
-	# Рисуем все ключевые города и локации с яркими плашками
+	# 2. Отрисовка значков городов и ключевых локаций
+	var font_cur = UIHelpers.get_font(true)
 	for l_pos in locations.keys():
 		var loc = locations[l_pos]
 		var w_pos = Vector2(l_pos.x * TILE_SIZE, l_pos.y * TILE_SIZE)
 		var center = w_pos + Vector2(TILE_SIZE/2.0, TILE_SIZE/2.0)
 		
-		# Золотистый ореол под городом
-		draw_circle(center, 18.0, Color(0.1, 0.1, 0.14, 0.85))
-		draw_circle(center, 14.0, loc.get("color", Color.GOLD))
-		draw_circle(center, 10.0, Color(0.12, 0.12, 0.16))
+		# Значок локации
+		var loc_type = loc.get("type", "village")
+		var icon_name = "loc_" + loc_type
+		var icon_tex = _get_ow_tex(icon_name)
+		if not icon_tex:
+			if loc_type == "city": icon_tex = _get_ow_tex("loc_capital")
+			elif loc_type in ["fort", "fortress"]: icon_tex = _get_ow_tex("loc_fort")
+			elif loc_type in ["dungeon", "crypt"]: icon_tex = _get_ow_tex("loc_crypt")
+			elif loc_type == "mine": icon_tex = _get_ow_tex("loc_mine")
+			elif loc_type == "farms": icon_tex = _get_ow_tex("loc_farms")
+			elif loc_type == "island": icon_tex = _get_ow_tex("loc_island")
+			else: icon_tex = _get_ow_tex("loc_village")
+			
+		if icon_tex:
+			var isz = icon_tex.get_size()
+			draw_texture(icon_tex, center - isz / 2.0)
 		
-		# Табличка с названием локации
+		# Геральдическая табличка с названием локации
 		var name_str: String = loc.get("name", "")
 		var icon_str: String = loc.get("icon", "📍")
 		var full_label = "%s %s" % [icon_str, name_str]
 		
-		var label_w = full_label.length() * 8.5
-		var label_rect = Rect2(center.x - label_w/2.0 - 6, center.y - 34, label_w + 12, 20)
-		draw_rect(label_rect, Color(0.10, 0.11, 0.16, 0.95))
-		draw_rect(label_rect, loc.get("color", Color.GOLD), false, 1.5)
-		draw_string(ThemeDB.fallback_font, Vector2(center.x - label_w/2.0, center.y - 19), full_label, HORIZONTAL_ALIGNMENT_CENTER, -1, 13, Color(1.0, 0.95, 0.8))
+		var label_w = full_label.length() * 8.0 + 16.0
+		var label_rect = Rect2(center.x - label_w/2.0, center.y - 32, label_w, 20)
+		
+		# Стильная темная плашка с золотой окантовкой
+		draw_rect(label_rect, Color(0.12, 0.09, 0.07, 0.92))
+		draw_rect(label_rect, Color(0.85, 0.72, 0.35), false, 1.5)
+		
+		var f_to_use = font_cur if font_cur else ThemeDB.fallback_font
+		draw_string(f_to_use, Vector2(center.x - label_w/2.0 + 8, center.y - 18), full_label, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(1.0, 0.95, 0.82))
 
-	# Рисуем маркер текущего положения игрока (Пульсирующий флаг / Фишка отряда)
+	# 3. Фишка отряда игрока (Королевский штандарт / Золотой жетон)
 	var p_center = Vector2(player_tile.x * TILE_SIZE + TILE_SIZE/2.0, player_tile.y * TILE_SIZE + TILE_SIZE/2.0)
-	draw_circle(p_center, 16.0, Color(1.0, 0.25, 0.25, 0.95))
-	draw_circle(p_center, 12.0, Color(1.0, 0.9, 0.2))
-	draw_circle(p_center, 7.0, Color(0.1, 0.1, 0.15))
+	var tok_tex = _get_ow_tex("token_player")
+	if tok_tex:
+		var tsz = tok_tex.get_size()
+		var bounce_y = sin(Time.get_ticks_msec() * 0.005) * 2.0
+		draw_texture(tok_tex, p_center - tsz / 2.0 + Vector2(0, bounce_y - 4))
+	else:
+		draw_circle(p_center, 12.0, Color(1.0, 0.9, 0.2))
 	
 	var player_box = Rect2(p_center.x - 48, p_center.y + 14, 96, 18)
-	draw_rect(player_box, Color(0.85, 0.15, 0.15, 0.95))
-	draw_rect(player_box, Color.GOLD, false, 1.5)
-	draw_string(ThemeDB.fallback_font, Vector2(p_center.x - 42, p_center.y + 27), "🚩 ВАШ ОТРЯД", HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color.WHITE)
+	draw_rect(player_box, Color(0.12, 0.09, 0.07, 0.95))
+	draw_rect(player_box, Color(0.95, 0.80, 0.30), false, 1.5)
+	var f_to_use = font_cur if font_cur else ThemeDB.fallback_font
+	draw_string(f_to_use, Vector2(p_center.x - 40, p_center.y + 27), "🚩 ВАШ ОТРЯД", HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(1.0, 0.95, 0.85))
+
+	# 4. Отрисовка движущихся торговых караванов
+	if caravan_system_ref and "active_caravans" in caravan_system_ref:
+		for c in caravan_system_ref.active_caravans:
+			var c_pos: Vector2 = c.get("current_map_pos", Vector2.ZERO)
+			if c_pos == Vector2.ZERO: continue
+			
+			# Линия торгового тракта
+			var s_p = Vector2(c["start_tile"].x * TILE_SIZE + TILE_SIZE/2.0, c["start_tile"].y * TILE_SIZE + TILE_SIZE/2.0)
+			var e_p = Vector2(c["end_tile"].x * TILE_SIZE + TILE_SIZE/2.0, c["end_tile"].y * TILE_SIZE + TILE_SIZE/2.0)
+			draw_line(s_p, e_p, Color(0.95, 0.80, 0.30, 0.35), 2.0)
+			
+			# Повозка / обоз
+			var bounce_c = sin(Time.get_ticks_msec() * 0.007 + c["id"]) * 2.0
+			draw_circle(c_pos + Vector2(0, bounce_c), 8.0, Color(0.95, 0.75, 0.25))
+			draw_circle(c_pos + Vector2(0, bounce_c), 4.5, Color(0.35, 0.2, 0.1))
+			
+			# Табличка каравана
+			var c_text = "🐫 Обоз: %s (%s)" % [c["city_name"], c["status"]]
+			var c_w = c_text.length() * 6.5 + 12.0
+			var c_box = Rect2(c_pos.x - c_w/2.0, c_pos.y - 24 + bounce_c, c_w, 16)
+			draw_rect(c_box, Color(0.1, 0.1, 0.12, 0.9))
+			draw_rect(c_box, Color(0.9, 0.75, 0.3), false, 1.0)
+			draw_string(f_to_use, Vector2(c_pos.x - c_w/2.0 + 6, c_pos.y - 12 + bounce_c), c_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 10, Color(1.0, 0.95, 0.8))

@@ -314,6 +314,15 @@ const EVENTS := [
 static func get_random_event() -> Dictionary:
 	return EVENTS.pick_random()
 
+static func get_random_event_excluding(excluded_ids: Array) -> Dictionary:
+	var pool: Array[Dictionary] = []
+	for e in EVENTS:
+		if not excluded_ids.has(e["id"]):
+			pool.append(e)
+	if pool.is_empty():
+		return EVENTS.pick_random()
+	return pool.pick_random()
+
 static func get_event_by_id(id: String) -> Dictionary:
 	for e in EVENTS:
 		if e["id"] == id:

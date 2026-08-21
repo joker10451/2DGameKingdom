@@ -16,7 +16,7 @@ func _ready() -> void:
 	player_data.character_name = "Игрок"
 	player_data.current_role = "Крестьянин"
 	player_data.gold = 15
-	player_data.inventory = {"bread": 2, "water": 1}
+	player_data.inventory = {"bread": 2, "water_flask": 1}
 	
 	print("[GameManager] Симуляция средневекового мира запущена.")
 

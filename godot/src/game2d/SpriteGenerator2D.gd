@@ -212,16 +212,16 @@ static func get_node_texture(type: String, size: int = 48) -> ImageTexture:
 		return _texture_cache[key]
 		
 	var file_path = "res://assets/sprites/world/%s.png" % type
-	if ResourceLoader.exists(file_path):
-		var loaded_tex = load(file_path) as Texture2D
-		if loaded_tex:
-			var img = loaded_tex.get_image()
-			if img and not img.is_empty():
-				if img.get_width() != size or img.get_height() != size:
-					img.resize(size, size, Image.INTERPOLATE_NEAREST)
-				var itex = ImageTexture.create_from_image(img)
-				_texture_cache[key] = itex
-				return itex
+	var global_path = ProjectSettings.globalize_path(file_path)
+	if FileAccess.file_exists(file_path) or FileAccess.file_exists(global_path):
+		var p_to_load = global_path if FileAccess.file_exists(global_path) else file_path
+		var img = Image.load_from_file(p_to_load)
+		if img and not img.is_empty():
+			if img.get_width() != size or img.get_height() != size:
+				img.resize(size, size, Image.INTERPOLATE_NEAREST)
+			var itex = ImageTexture.create_from_image(img)
+			_texture_cache[key] = itex
+			return itex
 		
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var cx = size / 2.0
@@ -439,6 +439,18 @@ static func get_node_texture(type: String, size: int = 48) -> ImageTexture:
 							c = Color(0.92, 0.88, 0.72) # Пергаменты
 							if (x + y) % 4 == 0: c = Color(0.3, 0.2, 0.1)
 							
+				"alchemy_lab":
+					# Алхимический верстак с колбами, котлом и свитками
+					if abs(x - cx) <= 15 and abs(y - (cy + 4)) <= 8:
+						c = Color(0.48, 0.30, 0.18) # Столешница
+						if y < cy: c = c.lightened(0.18)
+						if abs(x - (cx - 6)) <= 3 and abs(y - (cy - 4)) <= 4:
+							c = Color(0.20, 0.75, 0.95) # Синяя колба с зельем
+						elif abs(x - (cx + 5)) <= 3 and abs(y - (cy - 4)) <= 4:
+							c = Color(0.85, 0.25, 0.85) # Фиолетовая реторта
+						elif abs(x - cx) <= 2 and abs(y - (cy + 2)) <= 3:
+							c = Color(0.92, 0.88, 0.70) # Магический свиток
+							
 				_:
 					if abs(x - cx) <= 10 and abs(y - cy) <= 10:
 						c = Color(0.6, 0.5, 0.4)
@@ -453,6 +465,18 @@ static func get_character_texture(role_name: String, size: int = 48) -> ImageTex
 	var key = "char_%s_%d" % [role_name, size]
 	if _texture_cache.has(key):
 		return _texture_cache[key]
+		
+	var file_path = "res://assets/sprites/world/%s.png" % role_name
+	var global_path = ProjectSettings.globalize_path(file_path)
+	if FileAccess.file_exists(file_path) or FileAccess.file_exists(global_path):
+		var p_to_load = global_path if FileAccess.file_exists(global_path) else file_path
+		var img_f = Image.load_from_file(p_to_load)
+		if img_f and not img_f.is_empty():
+			if img_f.get_width() != size or img_f.get_height() != size:
+				img_f.resize(size, size, Image.INTERPOLATE_NEAREST)
+			var itex = ImageTexture.create_from_image(img_f)
+			_texture_cache[key] = itex
+			return itex
 		
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var cx = size / 2.0
@@ -535,6 +559,18 @@ static func get_animal_texture(type: String = "wolf", size: int = 48) -> ImageTe
 	if _texture_cache.has(key):
 		return _texture_cache[key]
 		
+	var file_path = "res://assets/sprites/world/%s.png" % type
+	var global_path = ProjectSettings.globalize_path(file_path)
+	if FileAccess.file_exists(file_path) or FileAccess.file_exists(global_path):
+		var p_to_load = global_path if FileAccess.file_exists(global_path) else file_path
+		var img = Image.load_from_file(p_to_load)
+		if img and not img.is_empty():
+			if img.get_width() != size or img.get_height() != size:
+				img.resize(size, size, Image.INTERPOLATE_NEAREST)
+			var itex = ImageTexture.create_from_image(img)
+			_texture_cache[key] = itex
+			return itex
+		
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var cx = size / 2.0
 	var cy = size / 2.0
@@ -562,12 +598,83 @@ static func get_animal_texture(type: String = "wolf", size: int = 48) -> ImageTe
 				if (p - Vector2(cx, cy)).length() < 11.0:
 					c = Color(0.75, 0.55, 0.28)
 					if y < cy - 4: c = Color(0.55, 0.35, 0.18) # Уши
+			elif type in ["skeleton", "skel"]:
+				if (p - Vector2(cx, cy)).length() < 12.0:
+					c = Color(0.90, 0.88, 0.80)
+					if abs(x - cx) <= 2 and y == int(cy - 2): c = Color(0.9, 0.1, 0.1) # Красные глаза
+			elif type == "boss_malgrim":
+				if (p - Vector2(cx, cy)).length() < 14.0:
+					c = Color(0.20, 0.18, 0.25)
+					if y < cy - 2: c = Color(0.8, 0.2, 0.9) # Фиолетовое свечение
 			else:
 				if (p - Vector2(cx, cy)).length() < 10.0:
 					c = Color(0.5, 0.5, 0.5)
 					
 			img.set_pixel(x, y, c)
 			
+	var tex = ImageTexture.create_from_image(img)
+	_texture_cache[key] = tex
+	return tex
+
+
+# ==============================================================================
+# PARALLAX BACKGROUND TEXTURES (deep polish pass)
+# ==============================================================================
+
+static func make_sky_texture(w: int = 1920, h: int = 1080) -> ImageTexture:
+	var key = "sky_%d_%d" % [w, h]
+	if _texture_cache.has(key):
+		return _texture_cache[key]
+	var img = Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var top = Color(0.42, 0.62, 0.86)
+	var bot = Color(0.78, 0.86, 0.72)
+	for y in range(h):
+		var t = float(y) / float(h)
+		var c = top.lerp(bot, t)
+		for x in range(w):
+			img.set_pixel(x, y, c)
+	var tex = ImageTexture.create_from_image(img)
+	_texture_cache[key] = tex
+	return tex
+
+static func make_hills_texture(w: int = 1920, h: int = 400) -> ImageTexture:
+	var key = "hills_%d_%d" % [w, h]
+	if _texture_cache.has(key):
+		return _texture_cache[key]
+	var img = Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var base = Color(0.45, 0.55, 0.38)
+	var dark = Color(0.34, 0.43, 0.30)
+	for y in range(h):
+		for x in range(w):
+			var hill = sin(float(x) / 140.0) * 30.0 + sin(float(x) / 53.0) * 16.0
+			var ridge = float(h) * 0.45 + hill
+			if y >= ridge:
+				var shade = 1.0 - (y - ridge) / float(h)
+				var c = base.lerp(dark, shade * 0.6)
+				img.set_pixel(x, y, c)
+	var tex = ImageTexture.create_from_image(img)
+	_texture_cache[key] = tex
+	return tex
+
+static func make_clouds_texture(w: int = 1920, h: int = 300) -> ImageTexture:
+	var key = "clouds_%d_%d" % [w, h]
+	if _texture_cache.has(key):
+		return _texture_cache[key]
+	var img = Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var rnd = RandomNumberGenerator.new()
+	for i in range(14):
+		var cx = rnd.randi_range(0, w)
+		var cy = rnd.randi_range(20, h - 60)
+		var cw = rnd.randi_range(80, 220)
+		var ch = rnd.randi_range(24, 54)
+		for y in range(max(0, cy - ch), min(h, cy + ch)):
+			for x in range(max(0, cx - cw), min(w, cx + cw)):
+				var dx = float(x - cx) / float(cw)
+				var dy = float(y - cy) / float(ch)
+				var d = sqrt(dx * dx + dy * dy)
+				if d <= 1.0:
+					var a = pow(1.0 - d, 1.3) * 0.5
+					img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
 	var tex = ImageTexture.create_from_image(img)
 	_texture_cache[key] = tex
 	return tex

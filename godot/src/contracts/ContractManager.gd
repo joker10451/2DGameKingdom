@@ -1,4 +1,4 @@
-﻿class_name ContractManager
+class_name ContractManager
 extends RefCounted
 
 ## МЕНЕДЖЕР ФЕОДАЛЬНЫХ КОНТРАКТОВ И РЕПУТАЦИИ
@@ -26,7 +26,10 @@ static func get_available_contracts(p: CharacterData) -> Array[Dictionary]:
 	var res: Array[Dictionary] = []
 	for id in ContractDatabase.get_all_contract_ids():
 		if id not in active_ids and id not in p.completed_contract_ids:
-			res.append(ContractDatabase.get_contract(id))
+			var c = ContractDatabase.get_contract(id)
+			var req_ren = c.get('req_renown', 0)
+			if p.renown >= req_ren:
+				res.append(c)
 	return res
 
 static func accept_contract(p: CharacterData, contract_id: String) -> bool:

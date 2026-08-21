@@ -268,27 +268,86 @@ static func generate_random_npc(force_role: String = "", home_spot: String = "")
 	}
 
 static func generate_population(count: int = 16) -> Array[Dictionary]:
+	return generate_population_for_location("village", count)
+
+static func generate_population_for_location(loc_type: String, count: int = 14) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	var roles: Array[Dictionary] = []
 	
-	# Обязательные ключевые роли для функционирования живого поселения:
-	var mandatory_roles = [
-		{"role": "Кузнец", "home": "blacksmith"},
-		{"role": "Торговец", "home": "home_a"},
-		{"role": "Городской Стражник", "home": "barracks"},
-		{"role": "Городской Стражник", "home": "barracks"},
-		{"role": "Дворянин", "home": "castle"},
-		{"role": "Наемник", "home": "tavern"},
-		{"role": "Разбойник", "home": "bandit_camp"},
-		{"role": "Разбойник", "home": "bandit_camp"},
-		{"role": "Крестьянин", "home": "home_b"},
-		{"role": "Крестьянин", "home": "farm"},
-	]
-	
-	for m in mandatory_roles:
+	match loc_type:
+		"city":
+			roles = [
+				{"role": "Дворянин", "home": "castle"},
+				{"role": "Дворянин", "home": "castle"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Торговец", "home": "market"},
+				{"role": "Торговец", "home": "market"},
+				{"role": "Кузнец", "home": "blacksmith"},
+				{"role": "Наемник", "home": "tavern"},
+				{"role": "Наемник", "home": "tavern"},
+			]
+		"mine":
+			roles = [
+				{"role": "Кузнец", "home": "blacksmith"},
+				{"role": "Кузнец", "home": "blacksmith"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Торговец", "home": "market"},
+				{"role": "Наемник", "home": "tavern"},
+			]
+		"swamp":
+			roles = [
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Торговец", "home": "market"},
+				{"role": "Наемник", "home": "tavern"},
+			]
+		"farms":
+			roles = [
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Крестьянин", "home": "farm"},
+				{"role": "Торговец", "home": "market"},
+				{"role": "Городской Стражник", "home": "barracks"},
+			]
+		"fort":
+			roles = [
+				{"role": "Разбойник", "home": "bandit_camp"},
+				{"role": "Разбойник", "home": "bandit_camp"},
+				{"role": "Разбойник-лучник", "home": "bandit_camp"},
+				{"role": "Разбойник-лучник", "home": "bandit_camp"},
+				{"role": "Бандит", "home": "bandit_camp"},
+				{"role": "Бандит", "home": "bandit_camp"},
+				{"role": "Торговец", "home": "market"},
+			]
+		"crypt", "dungeon":
+			roles = [
+				{"role": "Разбойник", "home": "bandit_camp"},
+				{"role": "Разбойник-лучник", "home": "bandit_camp"},
+			]
+		_: # village
+			roles = [
+				{"role": "Кузнец", "home": "blacksmith"},
+				{"role": "Торговец", "home": "home_a"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Городской Стражник", "home": "barracks"},
+				{"role": "Дворянин", "home": "castle"},
+				{"role": "Наемник", "home": "tavern"},
+				{"role": "Разбойник", "home": "bandit_camp"},
+				{"role": "Разбойник-лучник", "home": "bandit_camp"},
+				{"role": "Крестьянин", "home": "home_b"},
+				{"role": "Крестьянин", "home": "farm"},
+			]
+			
+	for m in roles:
 		result.append(generate_random_npc(m["role"], m["home"]))
-	
-	# Дополняем остальное население случайными странниками, торговцами и крестьянами
+		
 	while result.size() < count:
-		result.append(generate_random_npc())
-	
+		var fill_role = roles.pick_random()["role"] if roles.size() > 0 else ""
+		result.append(generate_random_npc(fill_role))
+		
 	return result

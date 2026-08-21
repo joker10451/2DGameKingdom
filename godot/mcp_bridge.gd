@@ -10,7 +10,7 @@ extends Node
 # integer literal below is rewritten in the project copy. The 9900 here is the
 # source-of-truth default that ships with the script so it remains runnable
 # standalone (e.g. validate, manual debugging).
-const PORT := 55139  # MCP_BRIDGE_PORT_BAKED
+const PORT := 58800  # MCP_BRIDGE_PORT_BAKED
 # Session token is baked into this script at inject time by BridgeManager.inject
 # for attach-mode sessions (there is no env-var channel to a Godot process the
 # user launched themselves). Spawned sessions deliver the token via the

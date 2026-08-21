@@ -21,7 +21,7 @@ signal tile_changed(pos: Vector2i)
 func _ready() -> void:
 	generate_world()
 
-func generate_world() -> void:
+func generate_world(_biome: String = "village", _loc_id: String = "village_olderia") -> void:
 	ground_tiles.clear()
 	structure_tiles.clear()
 	interactive_nodes.clear()
@@ -237,6 +237,38 @@ func can_walk(pos: Vector2i) -> bool:
 			return false
 			
 	return true
+
+func find_nodes_of_type(type_name: String) -> Array[Vector2i]:
+	var res: Array[Vector2i] = []
+	for p in interactive_nodes.keys():
+		if interactive_nodes[p].get("type") == type_name:
+			res.append(p)
+	return res
+
+func find_adjacent_walkable_tile(target: Vector2i) -> Vector2i:
+	var offsets = [
+		Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0),
+		Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)
+	]
+	for o in offsets:
+		var check_p = target + o
+		if can_walk(check_p):
+			return check_p
+	return target
+
+func find_closest_walkable_node(from_pos: Vector2i, type_name: String) -> Vector2i:
+	var nodes = find_nodes_of_type(type_name)
+	if nodes.is_empty():
+		return from_pos
+	var best_node = nodes[0]
+	var best_dist = float(from_pos.distance_squared_to(best_node))
+	for n in nodes:
+		var d = float(from_pos.distance_squared_to(n))
+		if d < best_dist:
+			best_dist = d
+			best_node = n
+	return find_adjacent_walkable_tile(best_node)
+
 
 func place_structure(pos: Vector2i, type: String) -> bool:
 	if structure_tiles.has(pos) or interactive_nodes.has(pos):

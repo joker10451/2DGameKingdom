@@ -19,9 +19,8 @@ __pycache__/
 *.7z
 *.rar
 
-# === OS / editor ===
-Thumbs.db
-.DS_Store
-desktop.ini
-.idea/
-.vscode/
+# === Previews & Temporary Render Images ===
+preview_*.png
+hero_*.png
+hero_test_render.png
+

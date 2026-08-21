@@ -111,11 +111,13 @@ func refresh() -> void:
 func _on_list_selected(idx: int) -> void:
 	_selected_item = _list.get_item_metadata(idx)
 	var item = _item_db.get_item(_selected_item)
+	var cat_name = _item_db.get_category_name(item.get("category", "misc"))
 	_details.text = """[b]%s %s[/b]
 
+%s
 
 [color=gold]Цена продажи:[/color] %d золотых
-[color=lightblue]Категория:[/color] %s""" % [item.get("icon", ""), item.get("name", ""), item.get("desc", ""), item.get("value", 1), item.get("category", "Разное")]
+[color=lightblue]Категория:[/color] %s""" % [item.get("icon", "📦"), item.get("name", _selected_item), item.get("desc", ""), item.get("value", 1), cat_name]
 	item_selected.emit(_selected_item)
 
 

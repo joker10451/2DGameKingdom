@@ -27,6 +27,7 @@ TimeManager="*res://src/core/TimeManager.gd"
 GameManager="*res://src/core/GameManager.gd"
 UIHelpers="*res://src/ui/UIHelpers.gd"
 
+McpBridge="*res://mcp_bridge.gd"
 [display]
 
 window/size/viewport_width=1280

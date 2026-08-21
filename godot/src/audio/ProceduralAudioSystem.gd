@@ -10,6 +10,7 @@ var sfx_players: Array[AudioStreamPlayer] = []
 var next_sfx_idx: int = 0
 
 var audio_cache: Dictionary = {}
+var music_enabled: bool = false
 
 func init_player(parent_node: Node) -> void:
 	# 1. Музыкальный плеер
@@ -23,19 +24,20 @@ func init_player(parent_node: Node) -> void:
 	if not ambience_player:
 		ambience_player = AudioStreamPlayer.new()
 		ambience_player.name = "AmbiencePlayer"
-		ambience_player.volume_db = -14.0
+		ambience_player.volume_db = -20.0
 		parent_node.add_child(ambience_player)
 		
 	# 3. Пул SFX плееров для полифонии
 	for i in range(8):
 		var p = AudioStreamPlayer.new()
 		p.name = "SFXPlayer_%d" % i
-		p.volume_db = -4.0
+		p.volume_db = -10.0
 		parent_node.add_child(p)
 		sfx_players.append(p)
 		
 	_preload_all_audio()
-	play_music("main_theme")
+	if music_enabled:
+		play_music("main_theme")
 
 func _preload_all_audio() -> void:
 	# Музыка
@@ -74,9 +76,13 @@ func _load_stream(key: String, path: String) -> void:
 			audio_cache[key] = stream
 
 func play_music(music_name: String = "main_theme") -> void:
-	if not music_player or not audio_cache.has(music_name): return
+	if not music_enabled or not music_player or not audio_cache.has(music_name): return
 	music_player.stream = audio_cache[music_name]
 	music_player.play()
+
+func stop_music() -> void:
+	if music_player:
+		music_player.stop()
 
 func play_ambience(amb_name: String = "amb_village_day") -> void:
 	if not ambience_player or not audio_cache.has(amb_name): return
@@ -89,8 +95,10 @@ func play_sfx(sfx_name: String) -> void:
 	if not key.begins_with("sfx_") and not audio_cache.has(key):
 		key = "sfx_" + key
 	if key == "sfx_coin": key = "sfx_coins"
-	elif key == "sfx_sword": key = "sfx_sword_hit"
-	elif key == "sfx_shield": key = "sfx_shield_block"
+	elif key in ["sfx_sword", "sfx_hit"]: key = "sfx_sword_hit"
+	elif key in ["sfx_shield", "sfx_block"]: key = "sfx_shield_block"
+	elif key in ["sfx_swing", "sfx_slash"]: key = "sfx_sword_swing"
+	elif key in ["sfx_bow", "sfx_shot"]: key = "sfx_bow_shot"
 	elif key == "sfx_step": key = "sfx_step_grass"
 	elif key == "sfx_mine": key = "sfx_pickaxe"
 	
@@ -100,14 +108,16 @@ func play_sfx(sfx_name: String) -> void:
 	next_sfx_idx = (next_sfx_idx + 1) % sfx_players.size()
 	
 	player.stream = audio_cache[key]
-	player.pitch_scale = randf_range(0.96, 1.04)
+	player.pitch_scale = randf_range(0.94, 1.06)
 	
-	# Тонкая настройка громкости отдельных эффектов
+	# Тонкая настройка громкости эффектов
 	if key == "sfx_door_open":
-		player.volume_db = -18.0 # Очень тихий и мягкий звук двери (-18 dB)
+		player.volume_db = -24.0 # Очень мягкий тихий звук двери
 	elif key in ["sfx_step_grass", "sfx_step_stone"]:
-		player.volume_db = -6.0
+		player.volume_db = -12.5 # Мягкие шаги
+	elif key in ["sfx_sword_hit", "sfx_sword_swing", "sfx_shield_block", "sfx_bow_shot"]:
+		player.volume_db = -3.5 # Отчетливые боевые звуки
 	else:
-		player.volume_db = 0.0
+		player.volume_db = -6.5 # Звон монет, крафт, рубка
 		
 	player.play()

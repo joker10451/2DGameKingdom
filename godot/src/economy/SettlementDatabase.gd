@@ -13,8 +13,7 @@ const ORIGINS := {
 			"axe_wood": 1,
 			"town_banner": 1,
 			"wood": 25,
-			"bread": 8,
-			"gold": 20
+			"bread": 8
 		},
 		"starting_gold": 20
 	},
