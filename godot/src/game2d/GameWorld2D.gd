@@ -102,6 +102,8 @@ const ConstructionModalScript = preload("res://src/ui/modals/ConstructionModal.g
 const ChestModalScript = preload("res://src/ui/modals/ChestModal.gd")
 const OriginModalScript = preload("res://src/ui/modals/OriginModal.gd")
 const CitizenShopModalScript = preload("res://src/ui/modals/CitizenShopModal.gd")
+const AlchemyModalScript = preload("res://src/ui/modals/AlchemyModal.gd")
+const StableModalScript = preload("res://src/ui/modals/StableModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -382,6 +384,10 @@ var origin_modal: RefCounted
 
 var citizen_shop_modal: RefCounted
 
+var alchemy_modal: RefCounted
+var stable_modal: RefCounted
+
+
 
 
 
@@ -594,10 +600,6 @@ var regen_salve_timer: float = 0.0
 
 # Верховая езда, конюшни и рыцарские турниры
 var is_mounted: bool = false
-var mount_panel: PanelContainer
-var mount_list: ItemList
-var mount_info: RichTextLabel
-var selected_horse_breed: String = "horse_bay"
 var is_tourney_active: bool = false
 var tourney_round: int = 0
 var tourney_enemy_idx: int = -1
@@ -4348,8 +4350,29 @@ func _build_ui_hud() -> void:
 		_close_all_modals           # on_close
 	)
 
-	_build_alchemy_modal(canvas)
+	# Alhimiya vynesena v ui/modals/AlchemyModal.gd (fasade).
+	alchemy_modal = AlchemyModalScript.new()
+	alchemy_modal.build(
+		canvas,
+		_craft_selected_alchemy,  # on_craft()
+		_close_all_modals         # on_close
+	)
 
+	# Konushnya vynesena v ui/modals/StableModal.gd (fasade).
+	stable_modal = StableModalScript.new()
+	stable_modal.build(
+		canvas,
+		_log,                    # on_log(text)
+		_spawn_floating_text,    # on_floating_text(pos, text, color, size)
+		_spawn_spark_particles,  # on_spark(pos, color)
+		_get_game_manager,       # get_manager()
+		_get_player_pos,         # get_player_pos()
+		_get_is_mounted,         # get_is_mounted()
+		_set_is_mounted,         # set_is_mounted(bool)
+		_buy_selected_horse,     # on_buy(breed_id)
+		_toggle_mount,           # on_toggle_mount(breed_id)
+		_close_all_modals,       # on_close
+	)
 
 
 func _build_dialogue_modal(canvas: CanvasLayer) -> void:
@@ -5017,7 +5040,7 @@ func _close_all_modals() -> void:
 	if citizen_shop_panel: citizen_shop_panel.visible = false
 
 	if alchemy_panel: alchemy_panel.visible = false
-	if mount_panel: mount_panel.visible = false
+	if stable_modal: stable_modal.close()
 	if shipyard_panel: shipyard_panel.visible = false
 	if dog_panel: dog_panel.visible = false
 	if bard_panel: bard_panel.visible = false
@@ -5077,6 +5100,16 @@ func _log(msg: String) -> void:
 
 func _get_game_manager() -> Node:
 	return get_node_or_null("/root/GameManager")
+
+func _get_player_pos() -> Vector2:
+	return player_pos
+
+func _get_is_mounted() -> bool:
+	return is_mounted
+
+func _set_is_mounted(v: bool) -> void:
+	is_mounted = v
+
 
 
 
@@ -7792,228 +7825,28 @@ func _harvest_herb(t_pos: Vector2i) -> void:
 
 	world_map.queue_redraw()
 
-
-
-# =========================================================
-
-# АЛХИМИЧЕСКИЙ СТОЛ И ВАРКА ЗЕЛИЙ 🧪⚗️
-
-# =========================================================
-
-func _build_alchemy_modal(canvas: CanvasLayer) -> void:
-
-	alchemy_panel = PanelContainer.new()
-
-	alchemy_panel.position = Vector2(250, 75)
-
-	alchemy_panel.custom_minimum_size = Vector2(780, 500)
-
-	alchemy_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.16, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-
-	alchemy_panel.visible = false
-
-	canvas.add_child(alchemy_panel)
-
-	
-
-	var vbox = VBoxContainer.new()
-
-	vbox.add_theme_constant_override("separation", 10)
-
-	alchemy_panel.add_child(vbox)
-
-	
-
-	var top_h = HBoxContainer.new()
-
-	top_h.add_theme_constant_override("separation", 12)
-
-	vbox.add_child(top_h)
-
-	
-
-	var title = Label.new()
-
-	title.text = "🧪 АЛХИМИЧЕСКИЙ СТОЛ И ЗЕЛЬЕВАРЕНИЕ"
-
-	title.add_theme_font_size_override("font_size", 18)
-
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-
-	top_h.add_child(title)
-
-	
-
-	var spacer = Control.new()
-
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	top_h.add_child(spacer)
-
-	
-
-	var close_btn = Button.new()
-
-	close_btn.text = "✖ Закрыть [ ESC ]"
-
-	_style_button(close_btn)
-
-	close_btn.pressed.connect(_close_all_modals)
-
-	top_h.add_child(close_btn)
-
-	
-
-	var body_h = HBoxContainer.new()
-
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	body_h.add_theme_constant_override("separation", 16)
-
-	vbox.add_child(body_h)
-
-	
-
-	var left_p = PanelContainer.new()
-
-	left_p.custom_minimum_size = Vector2(340, 380)
-
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	body_h.add_child(left_p)
-
-	
-
-	alchemy_list = ItemList.new()
-
-	alchemy_list.custom_minimum_size = Vector2(320, 360)
-
-	alchemy_list.item_selected.connect(_on_alchemy_item_selected)
-
-	left_p.add_child(alchemy_list)
-
-	
-
-	var right_v = VBoxContainer.new()
-
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	right_v.add_theme_constant_override("separation", 10)
-
-	body_h.add_child(right_v)
-
-	
-
-	var right_p = PanelContainer.new()
-
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-
-	right_v.add_child(right_p)
-
-	
-
-	alchemy_info = RichTextLabel.new()
-
-	alchemy_info.bbcode_enabled = true
-
-	alchemy_info.custom_minimum_size = Vector2(380, 300)
-
-	right_p.add_child(alchemy_info)
-
-	
-
-	var craft_btn = Button.new()
-
-	craft_btn.text = "⚗️ Сварить Зелье / Эликсир"
-
-	_style_button(craft_btn)
-
-	craft_btn.pressed.connect(_craft_selected_alchemy)
-
-	right_v.add_child(craft_btn)
-
+func _build_alchemy_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: alhimiya vynesena v ui/modals/AlchemyModal.gd.
+	# Sozdanie v _build_ui_hud() cherez alchemy_modal.build().
+	pass
 
 
 func _open_alchemy_modal() -> void:
-
+	if alchemy_modal == null:
+		return
 	_close_all_modals()
-
 	is_ui_open = true
-
-	alchemy_panel.visible = true
-
+	alchemy_modal.open()
 	selected_alchemy_recipe = "potion_healing"
-
 	_refresh_alchemy_modal()
 
 
-
 func _refresh_alchemy_modal() -> void:
-
-	alchemy_list.clear()
-
-	for rec_id in AlchemySystem.RECIPES.keys():
-
-		var rec = AlchemySystem.RECIPES[rec_id]
-
-		alchemy_list.add_item("%s %s" % [rec.get("icon", "🧪"), rec.get("name", "")])
-
-		alchemy_list.set_item_metadata(alchemy_list.get_item_count() - 1, rec_id)
-
-		
-
+	if alchemy_modal == null:
+		return
+	alchemy_modal.set_recipes(AlchemySystem.RECIPES.keys())
 	var rec = AlchemySystem.RECIPES.get(selected_alchemy_recipe, AlchemySystem.RECIPES["potion_healing"])
-
-	var cost_str = ""
-
-	for it_id in rec.get("cost", {}).keys():
-
-		var it = ItemDatabase.get_item(it_id)
-
-		cost_str += "%s %s: %d шт.  " % [it.get("icon", "📦"), it.get("name", it_id), rec["cost"][it_id]]
-
-		
-
-	alchemy_info.text = """[b][font_size=18]%s %s[/font_size][/b]
-
-[b]Необходимые ингредиенты:[/b] %s
-
-[b]Выход готовой продукции:[/b] %d шт.
-
-
-
-[color=lightgray]%s[/color]
-
-
-
-[color=gold]Поместите травы и компоненты в котел и нажмите кнопку «⚗️ Сварить Зелье»![/color]
-
-""" % [
-
-		rec.get("icon", "🧪"), rec.get("name", ""),
-
-		cost_str,
-
-		rec.get("yield", 1),
-
-		rec.get("desc", "")
-
-	]
-
-
-
-func _on_alchemy_item_selected(idx: int) -> void:
-
-	var rec_id = alchemy_list.get_item_metadata(idx)
-
-	if rec_id:
-
-		selected_alchemy_recipe = rec_id
-
-		_refresh_alchemy_modal()
-
+	alchemy_modal.show_detail(rec)
 
 
 func _craft_selected_alchemy() -> void:
@@ -8197,144 +8030,40 @@ func _on_fort_siege_victory() -> void:
 # =========================================================
 # КОНЮШНИ, ВЕРХОВАЯ ЕЗДА И РЫЦАРСКИЕ ТУРНИРЫ 🐎🏇🏆
 # =========================================================
-func _build_stable_modal(canvas: CanvasLayer) -> void:
-	mount_panel = PanelContainer.new()
-	mount_panel.position = Vector2(250, 75)
-	mount_panel.custom_minimum_size = Vector2(780, 500)
-	mount_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.16, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-	mount_panel.visible = false
-	canvas.add_child(mount_panel)
-	
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	mount_panel.add_child(vbox)
-	
-	var top_h = HBoxContainer.new()
-	top_h.add_theme_constant_override("separation", 12)
-	vbox.add_child(top_h)
-	
-	var title = Label.new()
-	title.text = "🐎 КОНЮШНЯ И РАЗВЕДЕНИЕ СКАКУНОВ"
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	top_h.add_child(title)
-	
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_h.add_child(spacer)
-	
-	var close_btn = Button.new()
-	close_btn.text = "✖ Закрыть [ ESC ]"
-	_style_button(close_btn)
-	close_btn.pressed.connect(_close_all_modals)
-	top_h.add_child(close_btn)
-	
-	var body_h = HBoxContainer.new()
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body_h.add_theme_constant_override("separation", 16)
-	vbox.add_child(body_h)
-	
-	var left_p = PanelContainer.new()
-	left_p.custom_minimum_size = Vector2(340, 380)
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	body_h.add_child(left_p)
-	
-	mount_list = ItemList.new()
-	mount_list.custom_minimum_size = Vector2(320, 360)
-	mount_list.item_selected.connect(_on_stable_item_selected)
-	left_p.add_child(mount_list)
-	
-	var right_v = VBoxContainer.new()
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_v.add_theme_constant_override("separation", 10)
-	body_h.add_child(right_v)
-	
-	var right_p = PanelContainer.new()
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	right_v.add_child(right_p)
-	
-	mount_info = RichTextLabel.new()
-	mount_info.bbcode_enabled = true
-	mount_info.custom_minimum_size = Vector2(380, 300)
-	right_p.add_child(mount_info)
-	
-	var act_h = HBoxContainer.new()
-	act_h.add_theme_constant_override("separation", 12)
-	right_v.add_child(act_h)
-	
-	var buy_btn = Button.new()
-	buy_btn.text = "🪙 Купить Скакуна"
-	_style_button(buy_btn)
-	buy_btn.pressed.connect(_buy_selected_horse)
-	act_h.add_child(buy_btn)
-	
-	var mount_btn = Button.new()
-	mount_btn.text = "🏇 Сесть в седло [ R ]"
-	_style_button(mount_btn)
-	mount_btn.pressed.connect(func():
-		_toggle_mount()
-		_refresh_stable_modal()
-	)
-	act_h.add_child(mount_btn)
+# КОНЮШНИ, ВЕРХОВАЯ ЕЗДА И РЫЦАРСКИЕ ТУРНИРЫ (UI вынесено в StableModal.gd)
+# =========================================================
+
+func _build_stable_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI вынесено в ui/modals/StableModal.gd.
+	# Создание в _build_ui_hud() через stable_modal.build().
+	pass
+
 
 func _open_stable_modal() -> void:
+	if stable_modal == null:
+		return
 	_close_all_modals()
 	is_ui_open = true
-	mount_panel.visible = true
-	selected_horse_breed = "horse_bay"
-	_refresh_stable_modal()
+	stable_modal.open()
+
 
 func _refresh_stable_modal() -> void:
-	mount_list.clear()
-	for b_id in MountSystem.HORSE_BREEDS.keys():
-		var b = MountSystem.HORSE_BREEDS[b_id]
-		mount_list.add_item("%s %s — %d з." % [b.get("icon", "🐎"), b.get("name", ""), b.get("cost", 40)])
-		mount_list.set_item_metadata(mount_list.get_item_count() - 1, b_id)
-		
-	var gm = _get_game_manager()
-	var p: CharacterData = gm.player_data if gm else null
-	MountSystem.ensure_mount_data(p)
-	
-	var b = MountSystem.HORSE_BREEDS.get(selected_horse_breed, MountSystem.HORSE_BREEDS["horse_bay"])
-	var active_b = p.settlement.get("active_horse", "") if p else ""
-	var has_horse = (active_b != "")
-	
-	mount_info.text = """[b][font_size=18]%s %s[/font_size][/b]
-[b]Стоимость покупки:[/b] [color=gold]%d золотых[/color]
-[b]Бонус к скорости:[/b] [color=green]+%d%%[/color]
-[b]Здоровье скакуна:[/b] %.0f HP
-[b]Таранный урон:[/b] %d урона
+	if stable_modal == null:
+		return
+	stable_modal.refresh()
 
-[color=lightgray]%s[/color]
 
----------------------------------------------------------
-[b]Текущий статус верховой езды:[/b] %s
-[b]Активный конь в стойле:[/b] %s
-[color=gold]Нажмите [ R ] во время странствий, чтобы оседлать или спешиться![/color]
-""" % [
-		b.get("icon", "🐎"), b.get("name", ""),
-		b.get("cost", 40),
-		int((b.get("speed_mult", 1.70) - 1.0) * 100),
-		b.get("max_hp", 120.0),
-		b.get("ram_dmg", 12),
-		b.get("desc", ""),
-		("[color=green]В СЕДЛЕ 🏇[/color]" if is_mounted else "[color=orange]ПЕШКОМ 🚶‍♂️[/color]"),
-		(active_b if has_horse else "Нет скакуна")
-	]
+func _on_stable_item_selected(_idx: int) -> void:
+	# выбор обрабатывается внутри StableModal (on_list_selected).
+	pass
 
-func _on_stable_item_selected(idx: int) -> void:
-	var b_id = mount_list.get_item_metadata(idx)
-	if b_id:
-		selected_horse_breed = b_id
-		_refresh_stable_modal()
 
 func _buy_selected_horse() -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
-	var res = MountSystem.buy_horse(p, selected_horse_breed)
+	var breed = stable_modal.get_selected_breed() if (stable_modal != null and stable_modal.has_method("get_selected_breed")) else "horse_bay"
+	var res = MountSystem.buy_horse(p, breed)
 	if res.get("success", false):
 		_log("[color=gold][b]🐎 ПОКУПКА: Вы приобрели скакуна: %s %s![/b][/color]" % [res.get("icon", "🐎"), res.get("name", "")])
 		_spawn_spark_particles(player_pos, Color.GOLD)
@@ -8343,18 +8072,17 @@ func _buy_selected_horse() -> void:
 	else:
 		_log("[color=red]⚠️ %s[/color]" % res.get("reason", "Ошибка покупки"))
 
+
 func _toggle_mount() -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
 	MountSystem.ensure_mount_data(p)
 	var active_b = p.settlement.get("active_horse", "")
 	if active_b == "":
 		_log("[color=orange]🐎 У вас нет скакуна в стойле. Приобретите лошадь в Конюшне [E]![/color]")
 		_spawn_floating_text(player_pos, "НЕТ СКАКУНА 🐎", Color.ORANGE, 16)
 		return
-		
 	is_mounted = not is_mounted
 	var h_def = MountSystem.HORSE_BREEDS.get(active_b, {})
 	if is_mounted:
