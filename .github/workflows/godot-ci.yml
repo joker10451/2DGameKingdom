@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Headless Validation & Quality Check
+    name: Headless Validation & Quality Gate
     runs-on: ubuntu-latest
 
     steps:
@@ -29,9 +29,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Verify Git Cleanliness & No Junk Files
+      - name: Verify Git Cleanliness & No Junk OS Files
         run: |
-          ! find . -name 'desktop.ini' -o -name 'Thumbs.db' -o -name '.DS_Store' | grep -q . || (echo 'ERROR: Junk OS files found in repo!' && exit 1)
+          if find . -name 'desktop.ini' -o -name 'Thumbs.db' -o -name '.DS_Store' | grep -q .; then
+            echo "❌ ERROR: Junk OS files found in repository!"
+            find . -name 'desktop.ini' -o -name 'Thumbs.db' -o -name '.DS_Store'
+            exit 1
+          fi
+          echo "✅ Repository clean of OS junk."
 
       - name: Setup Godot Engine (Headless)
         uses: chickensoft-games/setup-godot@v1
@@ -39,7 +44,12 @@ jobs:
           version: 4.3.0
           use-dotnet: false
 
-      - name: Import Godot Assets & Verify Project Syntax
+      - name: Import Godot Assets
         run: |
           cd godot
-          godot --headless --editor --quit-after 50 || true
+          godot --headless --editor --quit
+
+      - name: Run Headless Gameplay & Facade Quality Gate
+        run: |
+          cd godot
+          godot --headless --script "res://scripts/ci_smoke_test.gd"
