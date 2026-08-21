@@ -104,9 +104,65 @@ func _init() -> void:
 		printerr("❌ [CI FAILED] Missing materials guard failed: ", fail_res)
 		quit(1)
 		return
-	print("  ✅ LivingProductionSystem Closed-Loop OK (Grain -> Flour -> Bread verified!)")
+	# 6. Validate Death Lifecycle System (Death -> Inheritance -> Mourning -> Grudge)
+	print("\n[6/8] Validating Death Lifecycle System...")
+	var death_sys_script = preload("res://src/entities/DeathLifecycleSystem.gd")
+	var victim_d = preload("res://src/character/CharacterData.gd").new()
+	victim_d.name = "Кузнец Вульфрик"
+	victim_d.gold = 75
+	victim_d.inventory = {"iron_ingot": 4}
+	victim_d.health = 10.0
+
+	var killer_d = preload("res://src/character/CharacterData.gd").new()
+	killer_d.id = "bandit_boss_1"
+	killer_d.name = "Атаман Бран"
+
+	# Friend node with MemoryComponent
+	var friend_node = Node.new()
+	var friend_mem = preload("res://src/ai/MemoryComponent.gd").new()
+	friend_mem.opinions["Кузнец Вульфрик"] = 50.0 # Best friend
+	friend_node.add_child(friend_mem)
+
+	var d_res = death_sys_script.handle_character_death(null, victim_d, null, killer_d, [friend_node])
+	if not victim_d.is_dead or victim_d.gold != 0 or d_res["mourning_citizens"] != 1 or d_res["grudges_against_killer"] != 1:
+		printerr("❌ [CI FAILED] DeathLifecycleSystem failed: ", d_res)
+		quit(1)
+		return
+	print("  ✅ DeathLifecycleSystem OK (Workplace freed, mourning triggered, blood grudge added)")
+
+	# 7. Validate Memory -> AI Utility Behavior
+	print("\n[7/8] Validating Memory -> Behavior Integration...")
+	var brain = preload("res://src/ai/UtilityBrain.gd").new()
+	var test_char_d = preload("res://src/character/CharacterData.gd").new()
+	test_char_d.current_role = "Крестьянин"
+	var actor_needs = preload("res://src/ai/NeedsComponent.gd").new()
+	var actor_mem = preload("res://src/ai/MemoryComponent.gd").new()
+	actor_mem.opinions["bandit_boss_1"] = -60.0 # Hates killer
+	brain.char_data = test_char_d
+	brain.needs = actor_needs
+	brain.memory = actor_mem
+	brain.evaluate_and_act()
+	if brain.current_action != "FLEE_OR_AVOID":
+		printerr("❌ [CI FAILED] Memory -> Behavior failed: expected FLEE_OR_AVOID, got ", brain.current_action)
+		quit(1)
+		return
+	print("  ✅ Memory -> Behavior OK (Hated target triggers FLEE_OR_AVOID for Peasant)")
+
+	# 8. Validate Citizen Quest Reputation Rewards
+	print("\n[8/8] Validating Quest Reputation Rewards...")
+	var quest_sys = preload("res://src/quest/CitizenQuestSystem.gd").new()
+	var q_player = preload("res://src/character/CharacterData.gd").new()
+	q_player.inventory = {"wheat": 8}
+	q_player.reputation = 10
+	quest_sys.active_quests["quest_farmer_harvest"] = {"status": "active"}
+	var q_reward = quest_sys.complete_quest("quest_farmer_harvest", q_player)
+	if q_player.reputation != 30 or q_reward.get("reputation", 0) != 20:
+		printerr("❌ [CI FAILED] Quest reputation reward failed (expected 30, got %d)" % q_player.reputation)
+		quit(1)
+		return
+	print("  ✅ CitizenQuestSystem Reputation Fix OK (Reputation: 10 -> %d)" % q_player.reputation)
 
 	print("\n========================================================")
-	print("🎉 [CI QUALITY GATE PASSED] All 5 test suites passed with 0 errors!")
+	print("🎉 [CI QUALITY GATE PASSED] All 8 test suites passed with 0 errors!")
 	print("========================================================\n")
 	quit(0)

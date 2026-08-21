@@ -4,12 +4,22 @@ extends Resource
 ## Данные персонажа (игрока или любого жителя)
 
 # Личные данные
+@export var id: String = ""
 @export var character_name: String = "Безымянный"
 @export var title_prefix: String = "" # сэр, лорд, ваше величество, атаман
 @export var age: int = 25
 @export var gender: String = "Мужской" # "Мужской", "Женский"
 @export var current_role: String = "Крестьянин" # Крестьянин, Торговец, Бандит, Стражник, Ремесленник, Лорд, Король
 @export var faction_id: String = "free_folk" # free_folk, crown, outlaw_brotherhood, merchants_guild
+@export var health: float = 100.0
+@export var max_health: float = 100.0
+@export var is_dead: bool = false
+@export var reputation: int = 0
+@export var workplace_id: String = ""
+
+var name: String:
+	get: return character_name
+	set(val): character_name = val
 
 # Характеристики (1..100)
 @export var strength: int = 10       # Физический урон, переносимый вес

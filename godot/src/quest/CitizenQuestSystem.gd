@@ -155,6 +155,10 @@ func complete_quest(quest_id: String, player_data: CharacterData) -> Dictionary:
 		player_data.gold += rewards["gold"]
 	if rewards.has("renown"):
 		player_data.renown += rewards["renown"]
+	if rewards.has("reputation"):
+		player_data.reputation += rewards["reputation"]
+	if rewards.has("honor"):
+		player_data.honor += rewards["honor"]
 	if rewards.has("items"):
 		for it_id in rewards["items"].keys():
 			player_data.add_item(it_id, rewards["items"][it_id])
@@ -163,6 +167,15 @@ func complete_quest(quest_id: String, player_data: CharacterData) -> Dictionary:
 	completed_quests.append(quest_id)
 	
 	return rewards
+
+func cancel_quests_from_giver(giver_name: String) -> Array[String]:
+	var cancelled: Array[String] = []
+	for q_id in active_quests.keys():
+		var q = QUEST_DEFS.get(q_id, {})
+		if q.get("giver_name") == giver_name:
+			active_quests.erase(q_id)
+			cancelled.append(q_id)
+	return cancelled
 
 func get_current_primary_quest() -> Dictionary:
 	if active_quests.is_empty():
