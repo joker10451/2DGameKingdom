@@ -6376,11 +6376,12 @@ func _on_settlement_action_dispatched(action_name: String, param: Variant) -> vo
 
 func _start_village_raid() -> void:
 	is_raid_active = true
-
 	raid_wave = 1
-
 	raid_wave_enemies.clear()
-
+	if raid_system:
+		raid_system.start_raid(Vector2i(23, 6))
+	if alarm_bell_system and not alarm_bell_system.is_alarm_active:
+		_ring_alarm_bell()
 	_spawn_raid_wave(1)
 
 
@@ -6595,9 +6596,12 @@ func _on_raid_victory() -> void:
 
 		
 
-	_log("[color=gold][b]🏆 ПОБЕДА! Главарь разбойников Аттила и его шайка повержены![/b][/color]")
-
+	_log("[color=gold][b]🏆 ПОБЕДА! Штурмовой отряд разбойников разбит на подступах к Олдерии![/b][/color]")
 	_log("[color=yellow]Королевская награда от Лорда: +80 золотых, +25 Славы, +20 Чести![/color]")
+	if raid_system:
+		raid_system.total_raids_repelled += 1
+	if alarm_bell_system and alarm_bell_system.is_alarm_active:
+		_ring_alarm_bell()
 
 	_spawn_spark_particles(player_pos, Color.GOLD)
 
@@ -7988,9 +7992,7 @@ func _ring_alarm_bell() -> void:
 	_log("[color=%s]%s[/color]" % [col, res["msg"]])
 	
 func _trigger_bandit_raid() -> void:
-	if not raid_system: return
-	var raid_info = raid_system.start_raid(Vector2i(6, 6))
-	_log("[color=red]%s[/color]" % raid_info["message"])
+	_start_village_raid()
 
 # =========================================================
 # ПОДЗЕМЕЛЬЕ: СКЛЕП ЗАБЫТЫХ И БОСС МАЛЬГРИМ (ЭТАП 3)
@@ -8331,6 +8333,7 @@ func _update_surface_npcs(delta: float) -> void:
 						npc_sprites[target_bandit_idx].visible = false
 						_log("[color=lightgreen]🛡️ Стражник %s сразил разбойника на подступах к деревне![/color]" % npc["name"])
 						_spawn_floating_text(b_pos, "💀 СРАЖЕН", Color.GOLD, 18)
+						_check_raid_wave_progress()
 			else:
 				# Патрулирование по распорядку дня NPCRoutineController
 				var step_res = NPCRoutineController.update_npc_step(
