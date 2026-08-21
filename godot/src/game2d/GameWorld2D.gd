@@ -106,6 +106,7 @@ const AlchemyModalScript = preload("res://src/ui/modals/AlchemyModal.gd")
 const StableModalScript = preload("res://src/ui/modals/StableModal.gd")
 const ShipyardModalScript = preload("res://src/ui/modals/ShipyardModal.gd")
 const DogModalScript = preload("res://src/ui/modals/DogModal.gd")
+const BardModalScript = preload("res://src/ui/modals/BardModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -390,6 +391,7 @@ var alchemy_modal: RefCounted
 var stable_modal: RefCounted
 var shipyard_modal: RefCounted
 var dog_modal: RefCounted
+var bard_modal: RefCounted
 
 
 
@@ -616,11 +618,6 @@ var weather_cycle_timer: float = 90.0
 var smoke_emit_timer: float = 0.0
 
 # Бродячий Бард в Таверне 🎸🎶🍻
-var bard_panel: PanelContainer
-var bard_ballad_list: ItemList
-var bard_dialogue_text: RichTextLabel
-var selected_ballad_id: String = "king_ballad"
-var bard_npc_idx: int = -1
 
 # Преданный пес-компаньон 🐕❤️
 var dog_data: Dictionary = {
@@ -4403,6 +4400,20 @@ func _build_ui_hud() -> void:
 		_close_all_modals        # on_close
 	)
 
+	# Bard vynesen v ui/modals/BardModal.gd (fasade).
+	bard_modal = BardModalScript.new()
+	bard_modal.build(
+		canvas,
+		_log,                    # on_log(text)
+		_spawn_floating_text,    # on_floating_text(pos, text, color, size)
+		_spawn_spark_particles,  # on_spark(pos, color)
+		_get_game_manager,       # get_manager()
+		_get_bard_pos,           # get_bard_pos()
+		_play_selected_ballad,   # on_play(ballad_id)
+		_close_all_modals        # on_close
+	)
+
+
 
 
 
@@ -5074,7 +5085,7 @@ func _close_all_modals() -> void:
 	if stable_modal: stable_modal.close()
 	if shipyard_modal: shipyard_modal.close()
 	if dog_modal: dog_modal.close()
-	if bard_panel: bard_panel.visible = false
+	if bard_modal: bard_modal.close()
 
 
 
@@ -5134,6 +5145,9 @@ func _get_game_manager() -> Node:
 
 func _get_dog_data() -> Dictionary:
 	return dog_data
+
+func _get_bard_pos() -> Vector2:
+	return Vector2(24.5 * TILE_SIZE, 25.5 * TILE_SIZE)
 
 
 func _get_player_pos() -> Vector2:
@@ -8538,141 +8552,52 @@ func _process_weather_and_atmosphere(delta: float) -> void:
 # =========================================================
 # БРОДЯЧИЙ БАРД В ТАВЕРНЕ И БАЛЛАДЫ 🎸🎶🍻
 # =========================================================
-func _build_bard_modal(canvas: CanvasLayer) -> void:
-	bard_panel = PanelContainer.new()
-	bard_panel.position = Vector2(260, 90)
-	bard_panel.custom_minimum_size = Vector2(760, 480)
-	bard_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.16, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-	bard_panel.visible = false
-	canvas.add_child(bard_panel)
-	
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	bard_panel.add_child(vbox)
-	
-	var top_h = HBoxContainer.new()
-	top_h.add_theme_constant_override("separation", 12)
-	vbox.add_child(top_h)
-	
-	var title = Label.new()
-	title.text = "🎸 БРОДЯЧИЙ БАРД СЭР ЛЮТИЕН"
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	top_h.add_child(title)
-	
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_h.add_child(spacer)
-	
-	var close_btn = Button.new()
-	close_btn.text = "✖ Отойти [ ESC ]"
-	_style_button(close_btn)
-	close_btn.pressed.connect(_close_all_modals)
-	top_h.add_child(close_btn)
-	
-	var body_h = HBoxContainer.new()
-	body_h.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body_h.add_theme_constant_override("separation", 14)
-	vbox.add_child(body_h)
-	
-	var left_p = PanelContainer.new()
-	left_p.custom_minimum_size = Vector2(320, 360)
-	left_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	body_h.add_child(left_p)
-	
-	bard_ballad_list = ItemList.new()
-	bard_ballad_list.custom_minimum_size = Vector2(300, 340)
-	bard_ballad_list.item_selected.connect(_on_ballad_selected)
-	left_p.add_child(bard_ballad_list)
-	
-	var right_v = VBoxContainer.new()
-	right_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_v.add_theme_constant_override("separation", 10)
-	body_h.add_child(right_v)
-	
-	var right_p = PanelContainer.new()
-	right_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	right_v.add_child(right_p)
-	
-	bard_dialogue_text = RichTextLabel.new()
-	bard_dialogue_text.bbcode_enabled = true
-	bard_dialogue_text.custom_minimum_size = Vector2(380, 280)
-	right_p.add_child(bard_dialogue_text)
-	
-	var act_h = HBoxContainer.new()
-	act_h.add_theme_constant_override("separation", 10)
-	right_v.add_child(act_h)
-	
-	var play_btn = Button.new()
-	play_btn.text = "🎶 Заказать Балладу (5 з.)"
-	_style_button(play_btn)
-	play_btn.pressed.connect(_play_selected_ballad)
-	act_h.add_child(play_btn)
+# БРОДЯЧИЙ БАРД (UI вынесено в BardModal.gd)
+# =========================================================
+
+func _build_bard_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI вынесено в ui/modals/BardModal.gd.
+	# Создание в _build_ui_hud() через bard_modal.build().
+	pass
+
 
 func _open_bard_modal() -> void:
+	if bard_modal == null:
+		return
 	_close_all_modals()
 	is_ui_open = true
-	bard_panel.visible = true
-	selected_ballad_id = "king_ballad"
-	_refresh_bard_modal()
+	bard_modal.open()
+
 
 func _refresh_bard_modal() -> void:
-	bard_ballad_list.clear()
-	for b_id in LivingDialogueSystem.BALLADS.keys():
-		var b = LivingDialogueSystem.BALLADS[b_id]
-		bard_ballad_list.add_item("%s %s" % [b.get("icon", "🎵"), b.get("title", "")])
-		bard_ballad_list.set_item_metadata(bard_ballad_list.get_item_count() - 1, b_id)
-		
-	var b = LivingDialogueSystem.BALLADS.get(selected_ballad_id, LivingDialogueSystem.BALLADS["king_ballad"])
-	var verses_str = ""
-	for l in b.get("lines", []):
-		verses_str += "  [i]«" + l + "»[/i]\n"
-		
-	bard_dialogue_text.text = """[b][font_size=18]🎸 Сэр Лютиен: «Приветствую, благородный лорд!»[/font_size][/b]
+	if bard_modal == null:
+		return
+	bard_modal.refresh()
 
-[color=lightgray]Любуясь пляской пламени в камине, бард мягко перебирает струны своей верной лютни.
-В таверне звенит эль, и вся деревня замирает в ожидании славной песни...[/color]
 
-[b]Выбранная песнь:[/b] [color=gold]%s[/color]
-[b]Стоимость исполнения:[/b] 5 золотых монет
+func _on_ballad_selected(_idx: int) -> void:
+	# выбор обрабатывается внутри BardModal (on_list_selected).
+	pass
 
-%s
-
-[color=lightblue]💡 Эффект песни:[/color]
-Все посетители таверны подпевают хором, чокаются кружками эля и получают [b]+30 к Настроению[/b]!
-""" % [b.get("title", ""), verses_str]
-
-func _on_ballad_selected(idx: int) -> void:
-	var b_id = bard_ballad_list.get_item_metadata(idx)
-	if b_id:
-		selected_ballad_id = b_id
-		_refresh_bard_modal()
 
 func _play_selected_ballad() -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
+	var bid = bard_modal.get_selected_id() if (bard_modal != null and bard_modal.has_method("get_selected_id")) else "king_ballad"
 	if p.gold < 5:
 		_log("[color=orange]🪙 У вас недостаточно золота для заказа баллады (нужно 5 з.).[/color]")
 		return
-		
 	p.gold -= 5
-	var b = LivingDialogueSystem.BALLADS.get(selected_ballad_id, LivingDialogueSystem.BALLADS["king_ballad"])
-	
+	var b = LivingDialogueSystem.BALLADS.get(bid, LivingDialogueSystem.BALLADS["king_ballad"])
 	_log("[color=gold][b]🎶 БАРД ЗАИГРАЛ: %s![/b][/color]" % b.get("title", ""))
 	for l in b.get("lines", []):
 		_log("[color=yellow]  🎸 [i]%s[/i][/color]" % l)
-		
 	_log("[color=green][b]🍻 ЗАСТОЛЬЕ: Вся таверна ликует, чокается кружками эля и поет хором (+30 Mood)![/b][/color]")
-	
-	# Поднимаем настроение всем жителям в городе
 	var citizens: Array = p.settlement.get("citizens", [])
 	for c in citizens:
 		c["drank_ale_today"] = true
 		c["hunger"] = 100.0
-		
 	_spawn_spark_particles(Vector2(24.5 * TILE_SIZE, 25.5 * TILE_SIZE), Color.GOLD)
 	_spawn_floating_text(Vector2(24.5 * TILE_SIZE, 25.5 * TILE_SIZE), "🎶 ПЕСНЬ БАРДА! 🍻 ЧОКНУЛИСЬ ЭЛЕМ!", Color.GOLD, 20)
 	_refresh_bard_modal()
