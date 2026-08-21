@@ -1,2 +1,6 @@
 .mcp/*
 !.mcp/scripts/
+# Временные артефакты агента (MCP-сессии): не игровой код, не коммитить
+.mcp/scripts/*.policy.json
+.mcp/scripts/17*-*.gd
+.mcp/scripts/mcptest.mjs
