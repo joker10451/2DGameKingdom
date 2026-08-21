@@ -105,6 +105,7 @@ const CitizenShopModalScript = preload("res://src/ui/modals/CitizenShopModal.gd"
 const AlchemyModalScript = preload("res://src/ui/modals/AlchemyModal.gd")
 const StableModalScript = preload("res://src/ui/modals/StableModal.gd")
 const ShipyardModalScript = preload("res://src/ui/modals/ShipyardModal.gd")
+const DogModalScript = preload("res://src/ui/modals/DogModal.gd")
 const FaunaSystem2DScript = preload("res://src/world/FaunaSystem2D.gd")
 const AtmosphereVFXSystemScript = preload("res://src/world/AtmosphereVFXSystem.gd")
 const WorldDecorationsSystemScript = preload("res://src/world/WorldDecorationsSystem.gd")
@@ -388,6 +389,7 @@ var citizen_shop_modal: RefCounted
 var alchemy_modal: RefCounted
 var stable_modal: RefCounted
 var shipyard_modal: RefCounted
+var dog_modal: RefCounted
 
 
 
@@ -632,8 +634,7 @@ var dog_data: Dictionary = {
 }
 var dog_pos: Vector2 = Vector2.ZERO
 var dog_sprite: Sprite2D
-var dog_panel: PanelContainer
-var dog_dialogue_text: RichTextLabel
+
 var dog_bark_cooldown: float = 0.0
 var dog_thought_timer: float = 0.0
 var is_island_expedition_active: bool = false
@@ -4386,6 +4387,23 @@ func _build_ui_hud() -> void:
 		_close_all_modals        # on_close
 	)
 
+	# Pes-kompanon vynesen v ui/modals/DogModal.gd (fasade).
+	dog_modal = DogModalScript.new()
+	dog_modal.build(
+		canvas,
+		_log,                    # on_log(text)
+		_spawn_floating_text,    # on_floating_text(pos, text, color, size)
+		_spawn_spark_particles,  # on_spark(pos, color)
+		_get_dog_data,           # get_dog_data()
+		_feed_dog_food,          # on_feed()
+		_pet_dog_companion,      # on_pet()
+		_dog_give_paw_action,    # on_paw()
+		_toggle_dog_stay,        # on_toggle_stay()
+		_rename_dog_prompt,      # on_rename()
+		_close_all_modals        # on_close
+	)
+
+
 
 
 func _build_dialogue_modal(canvas: CanvasLayer) -> void:
@@ -5055,7 +5073,7 @@ func _close_all_modals() -> void:
 	if alchemy_panel: alchemy_panel.visible = false
 	if stable_modal: stable_modal.close()
 	if shipyard_modal: shipyard_modal.close()
-	if dog_panel: dog_panel.visible = false
+	if dog_modal: dog_modal.close()
 	if bard_panel: bard_panel.visible = false
 
 
@@ -5113,6 +5131,10 @@ func _log(msg: String) -> void:
 
 func _get_game_manager() -> Node:
 	return get_node_or_null("/root/GameManager")
+
+func _get_dog_data() -> Dictionary:
+	return dog_data
+
 
 func _get_player_pos() -> Vector2:
 	return player_pos
@@ -8393,216 +8415,49 @@ func _repair_structure(t_pos: Vector2i, type_name: String) -> void:
 # =========================================================
 # ПРЕДАННЫЙ ПЕС-КОМПАНЬОН И ТЕПЛО ДОМА 🐕❤️🐾🔥
 # =========================================================
-func _spawn_dog_companion() -> void:
-	dog_pos = Vector2(16.0 * TILE_SIZE + 24.0, 50.0 * TILE_SIZE + 24.0)
-	dog_sprite = Sprite2D.new()
-	dog_sprite.texture = SpriteGenerator2D.get_character_texture("wolf", TILE_SIZE)
-	dog_sprite.modulate = Color(0.95, 0.75, 0.45) # Теплый золотисто-рыжий окрас
-	dog_sprite.position = dog_pos
-	add_child(dog_sprite)
+# ПРЕДАННЫЙ ПЕС (UI вынесено в DogModal.gd)
+# =========================================================
 
-func _process_dog_companion(delta: float) -> void:
-	if not dog_sprite or is_in_dungeon or is_overworld_mode: return
-	
-	dog_thought_timer -= delta
-	dog_bark_cooldown -= delta
-	
-	if not dog_data.get("is_tamed", false):
-		# Дикий / бродячий пес сидит у мельницы
-		dog_sprite.position = dog_pos
-		if dog_thought_timer <= 0.0:
-			dog_thought_timer = randf_range(4.0, 7.0)
-			_spawn_floating_text(dog_pos, "🥺 *тихо поскуливает*", Color(0.9, 0.8, 0.6), 14)
-		return
-		
-	var state = dog_data.get("state", "follow")
-	
-	# 1. Проверка врагов поблизости (защита хозяина)
-	var closest_hostile_idx := -1
-	var closest_dist := 140.0
-	for i in range(npc_data.size()):
-		var n = npc_data[i]
-		if n.get("is_hostile", false) and not n.get("is_dead", false):
-			var d = dog_pos.distance_to(npc_positions[i])
-			if d < closest_dist:
-				closest_dist = d
-				closest_hostile_idx = i
-				
-	if closest_hostile_idx != -1 and state != "stay":
-		# Бежим в атаку на врага!
-		var target_pos = npc_positions[closest_hostile_idx]
-		var dir = (target_pos - dog_pos).normalized()
-		dog_pos += dir * 90.0 * delta
-		dog_sprite.position = dog_pos
-		
-		if closest_dist <= 25.0 and dog_bark_cooldown <= 0.0:
-			dog_bark_cooldown = 2.0
-			var bite_dmg = PetCompanionSystem.get_combat_bite_damage(dog_data)
-			npc_data[closest_hostile_idx]["hp"] = maxf(0.0, float(npc_data[closest_hostile_idx].get("hp", 50.0)) - bite_dmg)
-			_log("[color=gold]🐕 [b]%s[/b] с лаем вцепился во врага и нанес %.0f урона![/color]" % [dog_data.get("name", "Пес"), bite_dmg])
-			_spawn_floating_text(npc_positions[closest_hostile_idx], "🐕 УКУС! -%.0f" % bite_dmg, Color.GOLD, 16)
-			_spawn_spark_particles(dog_pos, Color.GOLD)
-		return
-		
-	# 2. Следование за игроком
-	if state == "follow":
-		var dist_to_player = dog_pos.distance_to(player_pos)
-		if dist_to_player > 42.0:
-			var dir = (player_pos - dog_pos).normalized()
-			var dog_speed = 85.0 if dist_to_player < 100.0 else 140.0
-			dog_pos += dir * dog_speed * delta
-			dog_sprite.position = dog_pos
-			
-		if dog_thought_timer <= 0.0:
-			dog_thought_timer = randf_range(5.0, 9.0)
-			var dog_emotes = ["🐶 ГАВ!", "🐾 *радостно виляет хвостом*", "❤️ *бежит рядом*", "🦋 *ловит бабочку*"]
-			_spawn_floating_text(dog_pos, dog_emotes[randi() % dog_emotes.size()], Color(1.0, 0.9, 0.6), 14)
-			
-	# 3. Охрана места
-	elif state == "stay":
-		dog_sprite.position = dog_pos
-		if dog_thought_timer <= 0.0:
-			dog_thought_timer = randf_range(7.0, 12.0)
-			_spawn_floating_text(dog_pos, "🐾 *сторожит на месте*", Color(0.9, 0.8, 0.6), 14)
+func _build_dog_modal(_canvas: CanvasLayer) -> void:
+	# DEPRECATED: UI вынесено в ui/modals/DogModal.gd.
+	# Создание в _build_ui_hud() через dog_modal.build().
+	pass
 
-func _build_dog_modal(canvas: CanvasLayer) -> void:
-	dog_panel = PanelContainer.new()
-	dog_panel.position = Vector2(280, 100)
-	dog_panel.custom_minimum_size = Vector2(720, 440)
-	dog_panel.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.10, 0.11, 0.16, 0.98), Color(0.85, 0.70, 0.30), 2, 8))
-	dog_panel.visible = false
-	canvas.add_child(dog_panel)
-	
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	dog_panel.add_child(vbox)
-	
-	var top_h = HBoxContainer.new()
-	top_h.add_theme_constant_override("separation", 12)
-	vbox.add_child(top_h)
-	
-	var title = Label.new()
-	title.text = "🐕 ПРЕДАННЫЙ ЧЕТВЕРОНОГИЙ ДРУГ"
-	title.add_theme_font_size_override("font_size", 18)
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	top_h.add_child(title)
-	
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_h.add_child(spacer)
-	
-	var close_btn = Button.new()
-	close_btn.text = "✖ Отойти [ ESC ]"
-	_style_button(close_btn)
-	close_btn.pressed.connect(_close_all_modals)
-	top_h.add_child(close_btn)
-	
-	var body_p = PanelContainer.new()
-	body_p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body_p.add_theme_stylebox_override("panel", _make_medieval_panel_style(Color(0.08, 0.09, 0.12, 0.9), Color(0.6, 0.5, 0.25), 1, 6))
-	vbox.add_child(body_p)
-	
-	dog_dialogue_text = RichTextLabel.new()
-	dog_dialogue_text.bbcode_enabled = true
-	dog_dialogue_text.custom_minimum_size = Vector2(680, 240)
-	body_p.add_child(dog_dialogue_text)
-	
-	var act_h = HBoxContainer.new()
-	act_h.add_theme_constant_override("separation", 10)
-	vbox.add_child(act_h)
-	
-	var feed_btn = Button.new()
-	feed_btn.text = "🍖 Угостить мясом / рыбой"
-	_style_button(feed_btn)
-	feed_btn.pressed.connect(func(): _feed_dog_food("meat_cooked"))
-	act_h.add_child(feed_btn)
-	
-	var pet_btn = Button.new()
-	pet_btn.text = "✋ Погладить за ушком ❤️"
-	_style_button(pet_btn)
-	pet_btn.pressed.connect(_pet_dog_companion)
-	act_h.add_child(pet_btn)
-	
-	var paw_btn = Button.new()
-	paw_btn.text = "🐾 Дай лапу!"
-	_style_button(paw_btn)
-	paw_btn.pressed.connect(_dog_give_paw_action)
-	act_h.add_child(paw_btn)
-	
-	var follow_btn = Button.new()
-	follow_btn.text = "🚶‍♂️ За мной / Охраняй"
-	_style_button(follow_btn)
-	follow_btn.pressed.connect(_toggle_dog_stay)
-	act_h.add_child(follow_btn)
-	
-	var name_btn = Button.new()
-	name_btn.text = "🏷️ Дать кличку"
-	_style_button(name_btn)
-	name_btn.pressed.connect(_rename_dog_prompt)
-	act_h.add_child(name_btn)
 
 func _open_dog_modal() -> void:
+	if dog_modal == null:
+		return
 	_close_all_modals()
 	is_ui_open = true
-	dog_panel.visible = true
-	_refresh_dog_modal()
+	dog_modal.open()
+
 
 func _refresh_dog_modal() -> void:
-	var is_t = dog_data.get("is_tamed", false)
-	var d_name = dog_data.get("name", "Бродячий пес")
-	var loyalty = dog_data.get("loyalty", 0)
-	var state = dog_data.get("state", "stay")
-	
-	if not is_t:
-		dog_dialogue_text.text = """[b][font_size=18]🐕 Бродячий Пес[/font_size][/b]
+	if dog_modal == null:
+		return
+	dog_modal.refresh()
 
-[color=lightgray]Перед вами сидит лохматый худой пес с умными и немного грустными глазами.
-Он тихо поскуливает от холода и с надеждой смотрит на вас, прижимая уши. 
-В его взгляде читается тоска по заботе и теплому очагу...[/color]
 
-[b]Статус:[/b] [color=orange]Бродячий и одинокий 🥺[/color]
-[color=gold]💡 Угостите его жареным мясом или рыбкой, чтобы заслужить его доверие и сделать верным спутником![/color]
-"""
-	else:
-		var state_str = "Бежит рядом 🐾" if state == "follow" else "Охраняет место 🛑"
-		dog_dialogue_text.text = """[b][font_size=18]🐕 %s — Ваш Верный Пес[/font_size][/b]
-
-[color=lightgreen]Пес радостно крутится вокруг ваших ног, довольно сопит и преданно заглядывает вам в глаза.
-Рядом с ним на душе становится спокойно и тепло. В бою он защитит вас от волков и бандитов![/color]
-
-[b]Уровень привязанности (Loyalty):[/b] [color=gold]%d / 100 ❤️[/color]
-[b]Текущая команда:[/b] %s
-[b]Здоровье друга:[/b] %.0f / %.0f HP
-
-[color=lightblue]🔥 Домашний уют:[/color]
-Когда вы дома у камина, пес ложится спать у ваших ног на теплый ковер и тихо посапывает.
-""" % [
-			d_name, loyalty, state_str,
-			dog_data.get("hp", 80.0), dog_data.get("max_hp", 80.0)
-		]
-
-func _feed_dog_food(food_pref: String) -> void:
+func _feed_dog_food(food_pref: String = "meat_cooked") -> void:
 	var gm = _get_game_manager()
 	var p: CharacterData = gm.player_data if gm else null
 	if not p: return
-	
 	var chosen_food = ""
 	for f_id in ["meat_cooked", "meat_raw", "fish_trout", "fish_salmon", "fish_soup", "bread"]:
 		if p.get_item_count(f_id) > 0:
 			chosen_food = f_id
 			break
-			
 	if chosen_food == "":
 		_log("[color=orange]🍖 У вас нет еды для пса (нужно жареное мясо, рыба, уха или хлеб).[/color]")
 		_refresh_dog_modal()
 		return
-		
 	var res = PetCompanionSystem.feed_pet(p, dog_data, chosen_food)
 	if res.get("success", false):
 		_log("[color=gold][b]❤️ %s[/b][/color]" % res.get("message", ""))
 		_spawn_spark_particles(dog_pos, Color.GOLD)
 		_spawn_floating_text(dog_pos, "❤️ ДОВЕРИЕ И ДРУЖБА!", Color.GOLD, 20)
-		_refresh_dog_modal()
+	_refresh_dog_modal()
+
 
 func _pet_dog_companion() -> void:
 	var res = PetCompanionSystem.pet_dog(dog_data)
@@ -8611,17 +8466,18 @@ func _pet_dog_companion() -> void:
 	_spawn_spark_particles(dog_pos, Color.PINK)
 	_refresh_dog_modal()
 
+
 func _dog_give_paw_action() -> void:
 	var res = PetCompanionSystem.give_paw(dog_data)
 	_log("[color=gold]🐾 %s[/color]" % res.get("message", ""))
 	_spawn_floating_text(dog_pos, "🐾 ДАЛ ЛАПУ!", Color.GOLD, 16)
 	_refresh_dog_modal()
 
+
 func _toggle_dog_stay() -> void:
 	if not dog_data.get("is_tamed", false):
 		_feed_dog_food("meat_cooked")
 		return
-		
 	var cur_st = dog_data.get("state", "follow")
 	if cur_st == "follow":
 		dog_data["state"] = "stay"
@@ -8633,6 +8489,7 @@ func _toggle_dog_stay() -> void:
 		_spawn_floating_text(dog_pos, "🚶‍♂️ ЗА МНОЙ!", Color.GREEN, 16)
 	_refresh_dog_modal()
 
+
 func _rename_dog_prompt() -> void:
 	var names = PetCompanionSystem.PET_NAMES
 	var cur_name = dog_data.get("name", "Верный")
@@ -8641,7 +8498,6 @@ func _rename_dog_prompt() -> void:
 	_log("[color=gold]🏷️ Вы назвали своего друга: [b]%s[/b]![/color]" % dog_data["name"])
 	_spawn_floating_text(dog_pos, "🐕 " + dog_data["name"], Color.GOLD, 18)
 	_refresh_dog_modal()
-
 
 # =========================================================
 # АТМОСФЕРА, ПОГОДА, ДЫМ ИЗ ТРУБ И ВЕЧЕРНИЕ ОКНА 🕯️🌧️💨
