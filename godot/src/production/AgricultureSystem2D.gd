@@ -11,7 +11,6 @@ const STAGE_SPROUT := 1
 const STAGE_GROWING := 2
 const STAGE_MATURE := 3
 
-# Базовый прогресс за один игровой час. 1.0 = одна стадия.
 const BASE_GROWTH_PER_HOUR: float = 0.18
 const WATERED_GROWTH_MULTIPLIER: float = 2.5
 const DRY_HOUR_GROWTH_MULTIPLIER: float = 0.65
@@ -19,6 +18,36 @@ const DRY_HOUR_GROWTH_MULTIPLIER: float = 0.65
 var current_weather: String = "clear"
 var last_processed_day: int = -1
 var last_processed_hour: int = -1
+
+func _init() -> void:
+	# AgricultureSystem2D is RefCounted, so bind directly to the global simulation bus.
+	var main_loop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var root = main_loop.root
+		var eb = root.get_node_or_null("EventBus")
+		if eb and eb.has_signal("hour_passed") and not eb.hour_passed.is_connected(_on_hour_passed):
+			eb.hour_passed.connect(_on_hour_passed)
+
+func _get_world_weather() -> String:
+	var main_loop = Engine.get_main_loop()
+	if not (main_loop is SceneTree):
+		return current_weather
+	var root = main_loop.root
+	var world = root.find_child("GameWorld2D", true, false)
+	if world and "current_weather" in world:
+		return str(world.current_weather)
+	return current_weather
+
+func _on_hour_passed(hour: int, day: int) -> void:
+	if day == last_processed_day and hour == last_processed_hour:
+		return
+	last_processed_day = day
+	last_processed_hour = hour
+
+	if hour == 6:
+		dry_all()
+	
+	process_game_hour(_get_world_weather())
 
 func plant_crop(pos: Vector2i, crop_type: String = "wheat") -> bool:
 	if crops.has(pos):
@@ -57,11 +86,11 @@ func dry_all() -> void:
 func process_game_hour(weather: String = "") -> Array[Vector2i]:
 	if weather != "":
 		set_weather(weather)
-	
+
 	var updated_tiles: Array[Vector2i] = []
 	if current_weather in ["rain", "storm"]:
 		auto_water_all()
-	
+
 	for pos in crops.keys():
 		var c = crops[pos]
 		if c["stage"] >= STAGE_MATURE:
@@ -73,17 +102,16 @@ func process_game_hour(weather: String = "") -> Array[Vector2i]:
 		if new_stage > c["stage"]:
 			c["stage"] = new_stage
 			updated_tiles.append(pos)
-	
+
 	return updated_tiles
 
 func on_new_day(hour: int = 6) -> void:
-	# Рассвет высушивает открытые грядки. Вызов рекомендуется на часе 06:00.
 	if hour == 6:
 		dry_all()
 
-func process_growth(delta_time: float) -> Array[Vector2i]:
-	# Backward-compatible API. Legacy callers should migrate to process_game_hour().
-	# Не использует frame delta, чтобы не возвращать рассинхрон real-time/game-time.
+func process_growth(_delta_time: float) -> Array[Vector2i]:
+	# Legacy API intentionally does not advance growth by frame time.
+	# Use process_game_hour() or let TimeManager drive it automatically.
 	return []
 
 func harvest_crop(pos: Vector2i, player_data: CharacterData) -> Dictionary:
