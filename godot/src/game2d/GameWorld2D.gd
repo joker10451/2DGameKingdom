@@ -1170,6 +1170,26 @@ func _get_npc_sprite_path(role: String, gender: String = "Мужской") -> St
 			return "res://assets/sprites/npcs/npc_merchant_female.png" if is_female else "res://assets/sprites/npcs/npc_merchant.png"
 		"Городской Стражник", "Стражница", "Наемник", "Воин", "Охотник", "Охотник-Егерь":
 			return "res://assets/sprites/npcs/npc_guard_female.png" if is_female else "res://assets/sprites/npcs/npc_guard.png"
+		"Разбойник-лучник", "Бандит-лучник", "Лесной Стрелок", "Стрелок-Браконьер", "Опытный Лучник", "Меткий Егерь", "Ядовитый Стрелок":
+			return "res://assets/sprites/npcs/npc_bandit_archer.png"
+		"Главарь Банды", "Атаман Бран", "Атаман Бран «Кровавый Топор»", "Аттила Железный Клык", "Главарь Разбойников", "Десятник Вульф", "Сотник Рагнар":
+			return "res://assets/sprites/npcs/npc_bandit_boss.png"
+		"Разбойница":
+			return "res://assets/sprites/npcs/npc_bandit_female.png"
+		"Бандит", "Разбойник", "Грабитель", "Шнырь из Чернолесья", "Грабитель Трактов", "Берсерк с Топором", "Ветеран Банды", "Головорез", "Мечник Чернолесья", "Ветеран-телохранитель":
+			return "res://assets/sprites/npcs/npc_bandit.png"
+		"Лорд", "Дворянин", "Староста", "Леди", "Дворянка":
+			return "res://assets/sprites/npcs/npc_lord_female.png" if is_female else "res://assets/sprites/npcs/npc_lord.png"
+		"Священник", "Монах":
+			return "res://assets/sprites/npcs/npc_merchant_female.png" if is_female else "res://assets/sprites/npcs/npc_merchant.png"
+		_:
+			return "res://assets/sprites/npcs/npc_peasant_female.png" if is_female else "res://assets/sprites/npcs/npc_peasant_male.png" 
+		"Кузнец", "Кузнечиха":
+			return "res://assets/sprites/npcs/npc_blacksmith_female.png" if is_female else "res://assets/sprites/npcs/npc_blacksmith.png"
+		"Торговец", "Торговка":
+			return "res://assets/sprites/npcs/npc_merchant_female.png" if is_female else "res://assets/sprites/npcs/npc_merchant.png"
+		"Городской Стражник", "Стражница", "Наемник", "Воин", "Охотник", "Охотник-Егерь":
+			return "res://assets/sprites/npcs/npc_guard_female.png" if is_female else "res://assets/sprites/npcs/npc_guard.png"
 		"Бандит", "Разбойник", "Разбойник-лучник", "Разбойница":
 			return "res://assets/sprites/npcs/npc_bandit_female.png" if is_female else "res://assets/sprites/npcs/npc_bandit.png"
 		"Лорд", "Дворянин", "Староста", "Леди", "Дворянка":
@@ -6525,14 +6545,63 @@ func _spawn_raid_wave(wave_num: int) -> void:
 			
 
 		var spr = Sprite2D.new()
-
-		spr.texture = SpriteGenerator2D.get_character_texture("bandit", TILE_SIZE)
+		var npc_tex_path := _get_npc_sprite_path(einfo["role"], "Мужской")
+		if einfo.get("is_boss", false):
+			npc_tex_path = "res://assets/sprites/npcs/npc_bandit_boss.png"
+		elif einfo.get("is_ranged", false):
+			npc_tex_path = "res://assets/sprites/npcs/npc_bandit_archer.png"
+			
+		var p_abs := ProjectSettings.globalize_path(npc_tex_path)
+		if FileAccess.file_exists(p_abs):
+			var img = Image.load_from_file(p_abs)
+			if img and not img.is_empty():
+				spr.texture = ImageTexture.create_from_image(img)
+				spr.hframes = 9
+				spr.vframes = 4
+				spr.frame = 18
+				spr.scale = Vector2(1.05, 1.05) if einfo.get("is_boss", false) else Vector2(0.85, 0.85)
+		elif ResourceLoader.exists(npc_tex_path):
+			spr.texture = load(npc_tex_path)
+			spr.hframes = 9
+			spr.vframes = 4
+			spr.frame = 18
+			spr.scale = Vector2(1.05, 1.05) if einfo.get("is_boss", false) else Vector2(0.85, 0.85)
+		else:
+			spr.texture = SpriteGenerator2D.get_character_texture("bandit", TILE_SIZE)
 
 		spr.position = w_pos
-
 		add_child(spr)
-
 		npc_sprites.append(spr)
+
+		# Тень под ногами
+		var shadow = Sprite2D.new()
+		shadow.texture = SpriteGenerator2D.get_shadow_texture(14, 7)
+		shadow.position = Vector2(0, 16)
+		shadow.z_index = -1
+		spr.add_child(shadow)
+
+		# Имя над головой
+		var lbl = Label.new()
+		lbl.name = "Nameplate"
+		lbl.text = einfo["name"]
+		lbl.position = Vector2(-60, -26)
+		lbl.size = Vector2(120, 16)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.98))
+		lbl.visible = false
+		spr.add_child(lbl)
+
+		# Облачко мыслей
+		var thought_lbl = Label.new()
+		thought_lbl.name = "ThoughtBubble"
+		thought_lbl.position = Vector2(-20, -42)
+		thought_lbl.size = Vector2(40, 18)
+		thought_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		thought_lbl.add_theme_font_size_override("font_size", 14)
+		thought_lbl.text = "👑" if einfo.get("is_boss", false) else ("🏹" if einfo.get("is_ranged", false) else "⚔️")
+		spr.add_child(thought_lbl)
 
 		
 
